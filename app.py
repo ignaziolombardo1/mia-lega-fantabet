@@ -138,14 +138,19 @@ elif menu == "📅 Schedine per Giornata":
         
         if squadre:
             for s in sorted(squadre, key=lambda x: x['nome_squadra']):
-                # Mostra il logo della squadra se disponibile
                 logo_s = s.get('logo_url')
-                logo_tag = f"<img src='{logo_s}' style='width:30px; height:30px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:8px;' />" if logo_s and logo_s.startswith('http') else "🛡️ "
                 
-                st.markdown(f"### {logo_tag} {s['nome_squadra']}, unsafe_allow_html=True")
+                # Visualizzazione pulita del titolo con logo
+                if logo_s and logo_s.startswith('http'):
+                    st.markdown(f"""<div style="display:flex; align-items:center; margin-bottom:10px;">
+                                <img src='{logo_s}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:10px;' onerror="this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';" />
+                                <h3 style="margin:0;">{s['nome_squadra']}</h3></div>""", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"### 🛡️ {s['nome_squadra']}")
+
                 url_schedina = schedine_dict.get(s['id'])
                 
-                # Controllo di sicurezza per mostrare correttamente l'immagine ed evitare testo grezzo
+                # Controllo di sicurezza per mostrare correttamente l'immagine
                 if url_schedina and url_schedina.startswith('http') and any(url_schedina.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
                     try:
                         st.image(url_schedina, caption=f"Schedina {s['nome_squadra']} - {giornata_scelta}", use_container_width=True)
