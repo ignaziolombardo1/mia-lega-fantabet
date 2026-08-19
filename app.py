@@ -11,7 +11,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS (Sidebar scura ma leggibile)
+# 3. Stile CSS (Sidebar scura e campi input ottimizzati)
 st.markdown("""
     <style>
     /* Testo generale bianco */
@@ -28,33 +28,34 @@ st.markdown("""
     [data-testid="stSidebar"] {
         background-color: #111111 !important;
     }
-    /* Solo i titoli/testi nella sidebar sono bianchi, i selettori mantengono il loro stile standard */
     [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
         color: #FFFFFF !important;
     }
     
-    /* CAMPI DI INPUT (Form registrazione e admin): Testo NERO su fondo bianco */
+    /* CAMPI DI INPUT: Testo NERO su fondo bianco */
     .stTextInput input, .stNumberInput input { 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
         font-weight: bold;
     }
-    /* Etichette dei campi bianche */
     label { color: #FFFFFF !important; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# 4. Logica Accesso
+# 4. Logica Accesso Admin con Invio automatico sulla password
 def check_password():
     if "admin" not in st.session_state: st.session_state.admin = False
     if not st.session_state.admin:
         st.sidebar.subheader("🔒 Accesso Amministratore")
-        pwd = st.sidebar.text_input("Password", type="password") 
-        if st.sidebar.button("Entra"):
-            if pwd == "capeta63": 
-                st.session_state.admin = True
-                st.rerun()
-            else: st.sidebar.error("Password errata")
+        with st.sidebar.form("form_login"):
+            pwd = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Entra")
+            if submitted:
+                if pwd == "capeta63": 
+                    st.session_state.admin = True
+                    st.rerun()
+                else: 
+                    st.error("Password errata")
         return False
     return True
 
@@ -85,12 +86,15 @@ else:
         st.title("⚙️ Area Admin")
         tab1, tab2, tab3 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🗑️ Elimina"])
         
+        # TAB 1: Registra Squadra (Premendo Invio si invia)
         with tab1:
             with st.form("form_squadra"):
+                st.subheader("Inserisci Nuova Squadra")
                 n = st.text_input("Nome Squadra")
                 pres = st.text_input("Nome Presidente")
                 vice = st.text_input("Nome Vicepresidente")
                 logo = st.text_input("URL Immagine Logo")
+                
                 if st.form_submit_button("Salva Squadra"):
                     if not n:
                         st.error("Il nome della squadra è obbligatorio!")
@@ -107,15 +111,18 @@ else:
                         except Exception as e:
                             st.error(f"Errore database durante il salvataggio squadra: {e}")
 
+        # TAB 2: Gestisci Punteggi (Premendo Invio si invia)
         with tab2:
             try:
                 squadre_list = supabase.table("squadre").select("*").execute().data
                 if squadre_list:
                     squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
                     with st.form("form_punti"):
+                        st.subheader("Assegna Punti")
                         sq = st.selectbox("Squadra", list(squadra_dict.keys()))
                         p = st.number_input("Punti", step=1, format="%d")
                         g = st.number_input("Giornata", min_value=1, step=1)
+                        
                         if st.form_submit_button("Conferma Punteggio"):
                             try:
                                 supabase.table("risultati").insert({
@@ -132,16 +139,44 @@ else:
             except Exception as e:
                 st.error(f"Errore caricamento squadre: {e}")
 
+        # TAB 3: Elimina Squadre e Punteggi
         with tab3:
-            try:
-                ris = supabase.table("risultati").select("*").execute().data
-                if ris:
-                    for r in ris:
-                        if st.button(f"Elimina punteggio ID: {r['id'][:4]}", key=r['id']):
-                            supabase.table("risultati").delete().eq("id", r['id']).execute()
-                            st.success("Eliminato!")
-                            st.rerun()
-                else:
-                    st.write("Nessun punteggio da eliminare.")
-            except Exception as e:
-                st.error(f"Errore caricamento risultati: {e}")
+            st.subheader("Elimina Squadre o Punteggi")
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                st.markdown("### 🗑️ Elimina Squadre")
+                try:
+                    squadre_del = supabase.table("squadre").select("*").execute().data
+                    if squadre_del:
+                        for s in squadre_del:
+                            if st.button(f"Elimina {s['nome_squadra']}", key=f"del_sq_{s['id']}"):
+                                # Prima elimina i punteggi associati per evitare errori di chiave esterna
+                                supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
+                                # Poi elimina la squadra
+                                supabase.table("squadre").delete().eq("id", s['id']).execute()
+                                st.success(f"Squadra '{s['nome_squadra']}' eliminata!")
+                                st.rerun()
+                    else:
+                        st.write("Nessuna squadra presente.")
+                except Exception as e:
+                    st.error(f"Errore: {e}")
+                    
+            with col_b:
+                st.markdown("### 🗑️ Elimina Punteggi")
+                try:
+                    ris = supabase.table("risultati").select("*").execute().data
+                    squadre_data = supabase.table("squadre").select("id, nome_squadra").execute().data
+                    squadre_map = {item['id']: item['nome_squadra'] for item in squadre_data}
+                    
+                    if ris:
+                        for r in ris:
+                            nome_sq = squadre_map.get(r['squadra_id'], "Squadra rimossa")
+                            if st.button(f"Del {nome_sq} (G.{r['giornata']}: {r['punteggio']}pt)", key=f"del_p_{r['id']}"):
+                                supabase.table("risultati").delete().eq("id", r['id']).execute()
+                                st.success("Punteggio eliminato!")
+                                st.rerun()
+                    else:
+                        st.write("Nessun punteggio registrato.")
+                except Exception as e:
+                    st.error(f"Errore: {e}")
