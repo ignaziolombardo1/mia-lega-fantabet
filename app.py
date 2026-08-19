@@ -3,7 +3,7 @@ from supabase import create_client
 import uuid
 import pandas as pd
 
-# 1. Configurazione Supabase (Aggiornata con i tuoi nuovi dati)
+# 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -39,9 +39,10 @@ st.markdown("""
         align-items: center;
     }
     .stApp { 
-        background-image: url("https://github.com/ignaziolombardo1/mia-lega-fantabet/blob/de0d9af981fb75ed84e96f7e7b6275b21c144002/background.jpg"); 
+        background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); 
         background-size: cover; 
         background-attachment: fixed;
+        background-position: center;
     }
     @media (max-width: 768px) {
         .stApp { background-attachment: scroll; }
@@ -192,13 +193,19 @@ else:
                     
             with col_b:
                 st.markdown("### Elimina Punteggi")
-                risultati = supabase.table("risultati").select("*, squadre(nome_squadra)").execute().data
-                if risultati:
-                    for r in risultati:
-                        nome_sq = r['squadre']['nome_squadra'] if r['squadre'] else "Squadra rimossa"
-                        if st.button(f"Del {nome_sq} (Giornata {r['giornata']}: {r['punteggio']} pts)", key=f"del_p_{r['id']}"):
-                            supabase.table("risultati").delete().eq("id", r['id']).execute()
-                            st.success("Punteggio eliminato!")
-                            st.rerun()
-                else:
-                    st.write("Nessun punteggio.")
+                try:
+                    risultati = supabase.table("risultati").select("*").execute().data
+                    squadre_data = supabase.table("squadre").select("id, nome_squadra").execute().data
+                    squadre_map = {s['id']: s['nome_squadra'] for s in squadre_data}
+                    
+                    if risultati:
+                        for r in risultati:
+                            nome_sq = squadre_map.get(r['squadra_id'], "Squadra rimossa")
+                            if st.button(f"Del {nome_sq} (Giornata {r['giornata']}: {r['punteggio']} pts)", key=f"del_p_{r['id']}"):
+                                supabase.table("risultati").delete().eq("id", r['id']).execute()
+                                st.success("Punteggio eliminato!")
+                                st.rerun()
+                    else:
+                        st.write("Nessun punteggio.")
+                except Exception as e:
+                    st.error(f"Errore nel caricamento dei punteggi: {e}")
