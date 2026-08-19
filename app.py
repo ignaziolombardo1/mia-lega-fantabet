@@ -45,9 +45,8 @@ st.markdown("""
     /* Adattamenti specifici per Smartphone (Responsive) */
     @media (max-width: 768px) {
         .stApp {
-            background-attachment: scroll; /* Migliora le performance su iOS/Android */
+            background-attachment: scroll;
         }
-        /* Ottimizzazione spaziature su mobile */
         .block-container {
             padding-left: 1rem;
             padding-right: 1rem;
@@ -75,7 +74,7 @@ def check_password():
 # 4. Menu di Navigazione
 menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Admin: Gestione Squadre", "Admin: Aggiungi/Togli Punti", "Admin: Gestione Punteggi"])
 
-# --- CLASSIFICA (Grafica a Card ottimizzata) ---
+# --- CLASSIFICA ---
 if menu == "Classifica":
     st.title("🏆 Classifica Generale FantaBet")
     squadre = supabase.table("squadre").select("*").execute().data
@@ -115,8 +114,12 @@ else:
                 if st.form_submit_button("Salva Squadra"):
                     logo_name = None
                     if logo:
-                        logo_name = f"{uuid.uuid4()}.png"
-                        supabase.storage.from_("leghe-fantabet").upload(logo_name, logo.getvalue())
+                        try:
+                            logo_name = f"{uuid.uuid4()}.png"
+                            supabase.storage.from_("leghe-fantabet").upload(logo_name, logo.getvalue())
+                        except Exception as e:
+                            st.warning("Attenzione: Impossibile caricare il logo nello Storage, ma la squadra verrà comunque registrata.")
+                            logo_name = None
                     
                     supabase.table("squadre").insert({
                         "nome_squadra": nome_squadra,
