@@ -1,0 +1,15 @@
+{
+  "name": "FantaBet Serie A",
+  "short_name": "FantaBet",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1117",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "INCOLLA_QUI_IL_LINK_RAW_DEL_TUO_LOGO",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
