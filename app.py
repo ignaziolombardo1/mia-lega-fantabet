@@ -8,23 +8,51 @@ SUPABASE_URL = "https://jynplanvtoytucanxsbn.supabase.co"
 SUPABASE_KEY = "sb_publishable_kiM3YkFbdFcyLxB8a3Ok6w_rqGhdKHY"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. Configurazione Pagina e Stile Grafico con Sfondo Personalizzato
+# 2. Configurazione Pagina e Stile Grafico (Ottimizzato per Mobile e Leggibilità)
 st.set_page_config(page_title="FantaBet", page_icon="⚽", layout="wide")
 
 st.markdown("""
     <style>
-    .card { 
-        background-color: rgba(255, 255, 255, 0.9); 
-        padding: 15px; 
-        border-radius: 15px; 
-        margin-bottom: 10px; 
-        border-left: 5px solid #2e7d32; 
-        color: #000000;
+    /* Colore e leggibilità delle scritte su tutto il sito */
+    html, body, [class*="css"] {
+        color: #FFFFFF !important;
     }
+    
+    /* Titoli con leggera ombra per risaltare sullo sfondo */
+    h1, h2, h3, h4 {
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Stile delle Card della Classifica (Sfondo scuro semi-trasparente ed elegante) */
+    .card { 
+        background-color: rgba(0, 0, 0, 0.65); 
+        padding: 15px; 
+        border-radius: 12px; 
+        margin-bottom: 10px; 
+        border-left: 5px solid #4CAF50; 
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    /* Sfondo dello stadio fisso */
     .stApp { 
         background-image: url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/4a866b472531ce29775b4ff679efa3b806c5ba47/background.jpg"); 
         background-size: cover; 
         background-attachment: fixed;
+    }
+
+    /* Adattamenti specifici per Smartphone (Responsive) */
+    @media (max-width: 768px) {
+        .stApp {
+            background-attachment: scroll; /* Migliora le performance su iOS/Android */
+        }
+        /* Ottimizzazione spaziature su mobile */
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+            padding-top: 2rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -47,7 +75,7 @@ def check_password():
 # 4. Menu di Navigazione
 menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Admin: Gestione Squadre", "Admin: Aggiungi/Togli Punti", "Admin: Gestione Punteggi"])
 
-# --- CLASSIFICA (Grafica a Card) ---
+# --- CLASSIFICA (Grafica a Card ottimizzata) ---
 if menu == "Classifica":
     st.title("🏆 Classifica Generale FantaBet")
     squadre = supabase.table("squadre").select("*").execute().data
@@ -59,13 +87,12 @@ if menu == "Classifica":
             punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
             classifica.append({'nome': s['nome_squadra'], 'punti': punti})
         
-        # Ordinamento dal punteggio più alto al più basso
         classifica_ordinata = sorted(classifica, key=lambda x: x['punti'], reverse=True)
         
         for pos, item in enumerate(classifica_ordinata, 1):
             st.markdown(f"""
                 <div class="card">
-                    <h3>{pos}°. {item['nome']} &nbsp;&nbsp;|&nbsp;&nbsp; <b>{item['punti']} punti</b></h3>
+                    <h3 style="margin:0; font-size: 1.2rem;">{pos}°. {item['nome']} &nbsp;|&nbsp; <b>{item['punti']} punti</b></h3>
                 </div>
             """, unsafe_allow_html=True)
     else:
@@ -76,7 +103,7 @@ else:
     if check_password():
         st.header("⚙️ Area Amministratore FantaBet")
         
-        # GESTIONE SQUADRE (Registrazione e Eliminazione)
+        # GESTIONE SQUADRE
         if menu == "Admin: Gestione Squadre":
             st.subheader("Registra Nuova Squadra")
             with st.form("form_squadra"):
@@ -156,3 +183,4 @@ else:
                         st.rerun()
             else:
                 st.info("Nessun punteggio inserito finora.")
+                
