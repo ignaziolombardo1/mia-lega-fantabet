@@ -54,7 +54,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 4. Logica Accesso
+# 4. Logica Accesso Admin
 def check_password():
     if "admin" not in st.session_state: st.session_state.admin = False
     if not st.session_state.admin:
@@ -69,7 +69,29 @@ def check_password():
         return False
     return True
 
-menu = st.sidebar.selectbox("Navigazione", ["Classifica", "📅 Schedine per Giornata", "Area Admin"])
+# Gestione della navigazione (Sidebar o Home)
+menu = st.sidebar.selectbox("Navigazione", ["Home / Seleziona", "Classifica", "📅 Schedine per Giornata", "Area Admin"])
+
+# Se l'utente sceglie la home o all'avvio, mostriamo la doppia opzione principale
+if menu == "Home / Seleziona":
+    st.title("⚽ Benvenuto nel FantaBet Serie A")
+    st.markdown("### Scegli quale sezione vuoi consultare:")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🏆 Vai alla Classifica Generale", use_container_width=True):
+            st.session_state.nav_scelta = "Classifica"
+            st.rerun()
+    with col_b:
+        if st.button("📅 Vai alle Schedine (Giornate 1-38)", use_container_width=True):
+            st.session_state.nav_scelta = "📅 Schedine per Giornata"
+            st.rerun()
+            
+    # Gestione dello stato dei pulsanti rapidi
+    if "nav_scelta" in st.session_state:
+        menu = st.session_state.nav_scelta
+    else:
+        st.stop()
 
 if menu == "Classifica":
     st.title("🏆 Classifica Generale FantaBet")
@@ -83,7 +105,7 @@ if menu == "Classifica":
                 logo_url = s.get('logo_url')
                 classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
             
-            # Ordinamento: Prima per punti decrescente, poi alfabetico
+            # Ordinamento: Prima per punti decrescente, poi in ordine alfabetico (A-Z)
             classifica_ordinata = sorted(classifica, key=lambda x: (-x['punti'], x['nome']))
             
             for pos, item in enumerate(classifica_ordinata, 1):
@@ -101,7 +123,9 @@ if menu == "Classifica":
     except Exception as e: st.error(f"Errore caricamento classifica: {e}")
 
 elif menu == "📅 Schedine per Giornata":
-    st.title("📅 Schedine delle Squadre")
+    st.title("📅 Schedine delle Squadre - Serie A")
+    
+    # Selezione della giornata da 1 a 38
     giornata_scelta = st.selectbox("Seleziona la Giornata di Campionato", [f"Giornata {i}" for i in range(1, 39)])
     num_giornata = int(giornata_scelta.split(" ")[1])
     
@@ -114,7 +138,11 @@ elif menu == "📅 Schedine per Giornata":
         
         if squadre:
             for s in sorted(squadre, key=lambda x: x['nome_squadra']):
-                st.markdown(f"### 🛡️ {s['nome_squadra']}")
+                # Mostra il logo della squadra anche qui se disponibile
+                logo_s = s.get('logo_url')
+                logo_tag = f"<img src='{logo_s}' style='width:30px; height:30px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:8px;' />" if logo_s and logo_s.startswith('http') else "🛡️ "
+                
+                st.markdown(f"### {logo_tag} {s['nome_squadra']}")
                 url_schedina = schedine_dict.get(s['id'])
                 
                 if url_schedina and url_schedina.startswith('http'):
@@ -127,7 +155,7 @@ elif menu == "📅 Schedine per Giornata":
     except Exception as e:
         st.error(f"Errore nel caricamento delle schedine: {e}")
 
-else:
+elif menu == "Area Admin":
     if check_password():
         st.title("⚙️ Area Admin")
         tab1, tab2, tab3, tab4 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🎫 Carica Schedina", "🗑️ Elimina Squadre"])
@@ -138,7 +166,7 @@ else:
                 st.subheader("Crea Nuova Squadra")
                 n = st.text_input("Nome Squadra")
                 pres = st.text_input("Nome Presidente")
-                logo = st.text_input("URL Immagine Logo (Link diretto)")
+                logo = st.text_input("URL Immagine Logo (Link diretto, es. Postimages)")
                 submit_sq = st.form_submit_button("Salva Squadra")
                 
                 if submit_sq:
@@ -186,10 +214,8 @@ else:
                         esistente = supabase.table("schedine").select("*").eq("squadra_id", s_id).eq("giornata", num_g).execute().data
                         
                         if esistente:
-                            # Aggiorna
                             supabase.table("schedine").update({"schedina_url": url_sch}).eq("squadra_id", s_id).eq("giornata", num_g).execute()
                         else:
-                            # Inserisci nuova
                             supabase.table("schedine").insert({"squadra_id": s_id, "giornata": num_g, "schedina_url": url_sch}).execute()
                             
                         st.success(f"✅ Schedina di **{sq_schedina}** per la **{giornata_admin}** caricata con successo!")
