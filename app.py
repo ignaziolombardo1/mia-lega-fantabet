@@ -11,14 +11,29 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS (Leggibilità Massima)
+# 3. Stile CSS (Scritte nere nei campi di input)
 st.markdown("""
     <style>
+    /* Testo generale bianco */
     html, body, [class*="css"] { color: #FFFFFF !important; }
     h1, h2, h3, h4 { color: #FFFFFF !important; text-shadow: 3px 3px 6px rgba(0, 0, 0, 1) !important; }
+    
+    /* Card */
     .card { background-color: rgba(0, 0, 0, 0.85) !important; padding: 15px !important; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid #4CAF50; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+    
+    /* Sfondo */
     .stApp { background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; background-position: center; }
-    .stTextInput > div > div > input, .stNumberInput > div > div > input, .stSelectbox > div > div > div { color: white !important; background-color: rgba(255,255,255,0.1) !important; }
+    
+    /* CAMPI DI INPUT: Testo NERO su fondo bianco */
+    .stTextInput > div > div > input, 
+    .stNumberInput > div > div > input, 
+    .stSelectbox > div > div > div { 
+        color: #000000 !important; 
+        background-color: #FFFFFF !important; 
+        font-weight: bold;
+    }
+    /* Label dei campi di input bianche */
+    label { color: #FFFFFF !important; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -27,7 +42,7 @@ def check_password():
     if "admin" not in st.session_state: st.session_state.admin = False
     if not st.session_state.admin:
         st.sidebar.subheader("🔒 Accesso Amministratore")
-        pwd = st.sidebar.text_input("Password", type="password") # Qui ora hai i pallini!
+        pwd = st.sidebar.text_input("Password", type="password") 
         if st.sidebar.button("Entra"):
             if pwd == "capeta63": 
                 st.session_state.admin = True
@@ -88,7 +103,8 @@ else:
 
         with tab3:
             ris = supabase.table("risultati").select("*").execute().data
-            for r in ris:
-                if st.button(f"Elimina punteggio di {r['punteggio']} (Giornata {r['giornata']})", key=r['id']):
-                    supabase.table("risultati").delete().eq("id", r['id']).execute()
-                    st.rerun()
+            if ris:
+                for r in ris:
+                    if st.button(f"Elimina punteggio ID: {r['id'][:4]}", key=r['id']):
+                        supabase.table("risultati").delete().eq("id", r['id']).execute()
+                        st.rerun()
