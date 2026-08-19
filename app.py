@@ -9,48 +9,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS con contrasto elevato e ombra nera forte
+# 3. Stile CSS
 st.markdown("""
     <style>
-    /* Sfondo principale con immagine e overlay scuro */
-    .stApp { 
-        background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); 
-        background-size: cover; 
-        background-attachment: fixed; 
-        background-position: center; 
-    }
-    
-    /* Tutti i testi generali in bianco con forte ombra scura */
-    html, body, [class*="css"], p, span, label { 
-        color: #FFFFFF !important; 
-        text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8) !important;
-    }
-    
-    h1, h2, h3, h4 { 
-        color: #FFFFFF !important; 
-        text-shadow: 3px 3px 6px rgba(0, 0, 0, 1), 0 0 15px rgba(0,0,0,0.9) !important; 
-    }
-    
-    /* Card della classifica e schedine */
-    .card { 
-        background-color: rgba(15, 15, 15, 0.9) !important; 
-        padding: 15px !important; 
-        border-radius: 12px !important; 
-        margin-bottom: 12px !important; 
-        border-left: 5px solid #4CAF50 !important; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.8) !important; 
-    }
-    
-    /* Sidebar scura e leggibile */
+    .stApp { background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; background-position: center; }
+    html, body, [class*="css"], p, span, label { color: #FFFFFF !important; text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95); }
+    h1, h2, h3, h4 { color: #FFFFFF !important; text-shadow: 3px 3px 6px rgba(0, 0, 0, 1); }
+    .card { background-color: rgba(15, 15, 15, 0.9) !important; padding: 15px !important; border-radius: 12px !important; margin-bottom: 12px !important; border-left: 5px solid #4CAF50 !important; }
     [data-testid="stSidebar"] { background-color: #111111 !important; }
-    [data-testid="stSidebar"] * { color: #FFFFFF !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.8) !important; }
-    
-    /* Campi di input con testo nero su sfondo bianco */
-    .stTextInput input, .stNumberInput input { 
-        color: #000000 !important; 
-        background-color: #FFFFFF !important; 
-        font-weight: bold;
-    }
+    .stTextInput input, .stNumberInput input { color: #000000 !important; background-color: #FFFFFF !important; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -62,39 +29,26 @@ def check_password():
         with st.sidebar.form("form_login"):
             pwd = st.text_input("Password", type="password")
             if st.form_submit_button("Entra"):
-                if pwd == "capeta63": 
-                    st.session_state.admin = True
-                    st.rerun()
+                if pwd == "capeta63": st.session_state.admin = True; st.rerun()
                 else: st.sidebar.error("Password errata")
         return False
     return True
 
-# Gestione della navigazione (Sidebar o Home)
-menu = st.sidebar.selectbox("Navigazione", ["Home / Seleziona", "Classifica", "📅 Schedine per Giornata", "Area Admin"])
+# Gestione stato navigazione (Default: Classifica)
+if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
 
-# Se l'utente sceglie la home o all'avvio, mostriamo la doppia opzione principale
-if menu == "Home / Seleziona":
-    st.title("⚽ Benvenuto nel FantaBet Serie A")
-    st.markdown("### Scegli quale sezione vuoi consultare:")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("🏆 Vai alla Classifica Generale", use_container_width=True):
-            st.session_state.nav_scelta = "Classifica"
-            st.rerun()
-    with col_b:
-        if st.button("📅 Vai alle Schedine (Giornate 1-38)", use_container_width=True):
-            st.session_state.nav_scelta = "📅 Schedine per Giornata"
-            st.rerun()
-            
-    # Gestione dello stato dei pulsanti rapidi
-    if "nav_scelta" in st.session_state:
-        menu = st.session_state.nav_scelta
-    else:
-        st.stop()
+# Barra di Navigazione in alto
+col1, col2, col3 = st.columns([1, 1, 2])
+with col1:
+    if st.button("🏆 Classifica"): st.session_state.current_page = "Classifica"
+with col2:
+    if st.button("📅 Schedine"): st.session_state.current_page = "Schedine"
+with col3:
+    if st.sidebar.button("⚙️ Area Admin"): st.session_state.current_page = "Admin"
 
-if menu == "Classifica":
-    st.title("🏆 Classifica Generale FantaBet")
+# --- PAGINA CLASSIFICA ---
+if st.session_state.current_page == "Classifica":
+    st.title("🏆 Classifica Generale")
     try:
         squadre = supabase.table("squadre").select("*").execute().data
         risultati = supabase.table("risultati").select("*").execute().data
@@ -102,149 +56,55 @@ if menu == "Classifica":
             classifica = []
             for s in squadre:
                 punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
-                logo_url = s.get('logo_url')
-                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
-            
-            # Ordinamento: Prima per punti decrescente, poi in ordine alfabetico (A-Z)
-            classifica_ordinata = sorted(classifica, key=lambda x: (-x['punti'], x['nome']))
-            
-            for pos, item in enumerate(classifica_ordinata, 1):
-                if item['logo'] and item['logo'].startswith('http'):
-                    logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' onerror=\"this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';\" />"
-                else:
-                    logo_html = "<span style='margin-right:15px; font-size:25px;'>⚽</span>"
-                
-                st.markdown(f"""<div class="card"><div style="display:flex; align-items:center; width:100%;">
+                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': s.get('logo_url'), 'id': s['id']})
+            for pos, item in enumerate(sorted(classifica, key=lambda x: (-x['punti'], x['nome'])), 1):
+                logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' onerror=\"this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';\" />" if item['logo'] and item['logo'].startswith('http') else "<span style='margin-right:15px; font-size:25px;'>⚽</span>"
+                st.markdown(f"""<div class="card"><div style="display:flex; align-items:center;">
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold; font-size:18px;">{item['nome']}</span>
                             <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
-        else:
-            st.info("Nessuna squadra registrata.")
-    except Exception as e: st.error(f"Errore caricamento classifica: {e}")
+    except Exception as e: st.error(f"Errore: {e}")
 
-elif menu == "📅 Schedine per Giornata":
-    st.title("📅 Schedine delle Squadre - Serie A")
-    
-    # Selezione della giornata da 1 a 38
-    giornata_scelta = st.selectbox("Seleziona la Giornata di Campionato", [f"Giornata {i}" for i in range(1, 39)])
-    num_giornata = int(giornata_scelta.split(" ")[1])
-    
+# --- PAGINA SCHEDINE ---
+elif st.session_state.current_page == "Schedine":
+    st.title("📅 Schedine")
+    giornata = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=0)
+    num_g = int(giornata.split(" ")[1])
     try:
         squadre = supabase.table("squadre").select("*").execute().data
-        schedine = supabase.table("schedine").select("*").eq("giornata", num_giornata).execute().data
-        
-        # Mappa le schedine per squadra_id
+        schedine = supabase.table("schedine").select("*").eq("giornata", num_g).execute().data
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
-        
-        if squadre:
-            for s in sorted(squadre, key=lambda x: x['nome_squadra']):
-                logo_s = s.get('logo_url')
-                
-                # Visualizzazione pulita del titolo con logo
-                if logo_s and logo_s.startswith('http'):
-                    st.markdown(f"""<div style="display:flex; align-items:center; margin-bottom:10px;">
-                                <img src='{logo_s}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:10px;' onerror="this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';" />
-                                <h3 style="margin:0;">{s['nome_squadra']}</h3></div>""", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"### 🛡️ {s['nome_squadra']}")
+        for s in sorted(squadre, key=lambda x: x['nome_squadra']):
+            st.markdown(f"### {s['nome_squadra']}")
+            url = schedine_dict.get(s['id'])
+            if url and url.startswith('http'): st.image(url, use_container_width=True)
+            else: st.info("Nessuna schedina caricata.")
+            st.markdown("---")
+    except Exception as e: st.error(f"Errore: {e}")
 
-                url_schedina = schedine_dict.get(s['id'])
-                
-                # Controllo di sicurezza per mostrare correttamente l'immagine
-                if url_schedina and url_schedina.startswith('http') and any(url_schedina.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
-                    try:
-                        st.image(url_schedina, caption=f"Schedina {s['nome_squadra']} - {giornata_scelta}", use_container_width=True)
-                    except:
-                        st.warning(f"Impossibile visualizzare l'immagine per {s['nome_squadra']}.")
-                else:
-                    st.info(f"Nessuna schedina valida caricata per {s['nome_squadra']} in questa giornata.")
-                st.markdown("---")
-        else:
-            st.info("Nessuna squadra registrata.")
-    except Exception as e:
-        st.error(f"Errore nel caricamento delle schedine: {e}")
-
-elif menu == "Area Admin":
+# --- AREA ADMIN ---
+elif st.session_state.current_page == "Admin":
     if check_password():
         st.title("⚙️ Area Admin")
-        tab1, tab2, tab3, tab4 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🎫 Carica Schedina", "🗑️ Elimina Squadre"])
-        
-        # TAB 1: Registra Squadra
+        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punteggi", "🎫 Schedine", "🗑️ Elimina"])
         with tab1:
-            with st.form("form_squadra"):
-                st.subheader("Crea Nuova Squadra")
-                n = st.text_input("Nome Squadra")
-                pres = st.text_input("Nome Presidente")
-                logo = st.text_input("URL Immagine Logo (Link diretto, es. Postimages)")
-                submit_sq = st.form_submit_button("Salva Squadra")
-                
-                if submit_sq:
-                    if n:
-                        supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
-                        st.success(f"✅ **Operazione completata!** La squadra **{n}** è stata registrata con successo.")
-                    else:
-                        st.error("⚠️ Inserisci obbligatoriamente il nome della squadra.")
-
-        # TAB 2: Gestisci Punteggi
+            with st.form("add_s"):
+                n = st.text_input("Nome Squadra"); pres = st.text_input("Presidente"); logo = st.text_input("URL Logo")
+                if st.form_submit_button("Salva"): supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
         with tab2:
-            squadre_list = supabase.table("squadre").select("*").execute().data
-            if squadre_list:
-                squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
-                with st.form("form_punti"):
-                    st.subheader("Modifica Punteggio Squadra")
-                    sq = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()))
-                    p = st.number_input("Punti (positivo per aggiungere, negativo es. -3 per togliere)", step=1, value=0)
-                    submit_pts = st.form_submit_button("Aggiorna Punteggio")
-                    
-                    if submit_pts:
-                        supabase.table("risultati").insert({"squadra_id": squadra_dict[sq], "punteggio": p}).execute()
-                        azione = "Aggiunti" if p >= 0 else "Tolti"
-                        st.success(f"✅ **Aggiornamento riuscito!** {azione} **{abs(p)} punti** alla squadra **{sq}**.")
-            else:
-                st.warning("Registra prima almeno una squadra.")
-
-        # TAB 3: Carica Schedina per Giornata
+            with st.form("add_p"):
+                sq = st.selectbox("Squadra", [s['nome_squadra'] for s in supabase.table("squadre").select("*").execute().data])
+                p = st.number_input("Punti", step=1); 
+                if st.form_submit_button("Aggiorna"): 
+                    s_id = next(s['id'] for s in supabase.table("squadre").select("*").execute().data if s['nome_squadra'] == sq)
+                    supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p}).execute()
         with tab3:
-            squadre_list = supabase.table("squadre").select("*").execute().data
-            if squadre_list:
-                squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
-                with st.form("form_schedina_admin"):
-                    st.subheader("Carica Schedina Giornaliera")
-                    giornata_admin = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_adm")
-                    sq_schedina = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()), key="s_adm")
-                    url_sch = st.text_input("URL Immagine Schedina (Link diretto)")
-                    submit_sch = st.form_submit_button("Salva Schedina")
-                    
-                    if submit_sch:
-                        num_g = int(giornata_admin.split(" ")[1])
-                        s_id = squadra_dict[sq_schedina]
-                        
-                        esistente = supabase.table("schedine").select("*").eq("squadra_id", s_id).eq("giornata", num_g).execute().data
-                        
-                        if esistente:
-                            supabase.table("schedine").update({"schedina_url": url_sch}).eq("squadra_id", s_id).eq("giornata", num_g).execute()
-                        else:
-                            supabase.table("schedine").insert({"squadra_id": s_id, "giornata": num_g, "schedina_url": url_sch}).execute()
-                            
-                        st.success(f"✅ Schedina di **{sq_schedina}** per la **{giornata_admin}** caricata con successo!")
-            else:
-                st.warning("Registra prima almeno una squadra.")
-
-        # TAB 4: Elimina Squadre
+            with st.form("add_sch"):
+                g = st.selectbox("Giornata", [f"Giornata {i}" for i in range(1, 39)])
+                sq_s = st.selectbox("Squadra Schedina", [s['nome_squadra'] for s in supabase.table("squadre").select("*").execute().data])
+                u_sch = st.text_input("URL Schedina")
+                if st.form_submit_button("Carica"): 
+                    s_id = next(s['id'] for s in supabase.table("squadre").select("*").execute().data if s['nome_squadra'] == sq_s)
+                    supabase.table("schedine").insert({"squadra_id": s_id, "giornata": int(g.split()[1]), "schedina_url": u_sch}).execute()
         with tab4:
-            st.subheader("Elimina Squadre dal Database")
-            squadre_del = supabase.table("squadre").select("*").execute().data
-            if squadre_del:
-                for s in squadre_del:
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.write(f"**{s['nome_squadra']}** (Presidente: {s.get('presidente', 'N/D')})")
-                    with col2:
-                        if st.button(f"Elimina", key=f"del_{s['id']}"):
-                            supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
-                            supabase.table("schedine").delete().eq("squadra_id", s['id']).execute()
-                            supabase.table("squadre").delete().eq("id", s['id']).execute()
-                            st.success(f"🗑️ Squadra **{s['nome_squadra']}** eliminata correttamente.")
-                            st.rerun()
-            else:
-                st.info("Nessuna squadra presente da eliminare.")
+            if st.button("Elimina Tutto/Gestisci"): st.rerun()
