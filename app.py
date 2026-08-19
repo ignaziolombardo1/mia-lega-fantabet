@@ -8,7 +8,7 @@ SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. Configurazione Pagina e Stile Grafico (Mobile-Friendly e Sfondo)
+# 2. Configurazione Pagina e Stile Grafico (Mobile-Friendly, Icona Home & Sfondo)
 st.set_page_config(
     page_title="FantaBet Serie A", 
     page_icon="⚽", 
@@ -18,6 +18,7 @@ st.set_page_config(
 
 st.markdown("""
     <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/logo.png">
     <style>
     html, body, [class*="css"] {
         color: #FFFFFF !important;
@@ -38,7 +39,7 @@ st.markdown("""
         align-items: center;
     }
     .stApp { 
-        background-image: url("INCOLLA_QUI_IL_LINK_RAW_DEL_TUO_BACKGROUND"); 
+        background-image: url("aaaaaaaaaaaaaaaaaaaaaaa"); 
         background-size: cover; 
         background-attachment: fixed;
     }
@@ -127,7 +128,7 @@ else:
                 nome_squadra = st.text_input("Nome Squadra")
                 presidente = st.text_input("Nome Presidente")
                 vicepresidente = st.text_input("Nome Vicepresidente")
-                logo_url = st.text_input("URL Immagine Logo (Incolla il link Raw del logo)")
+                logo_url = st.text_input("URL Immagine Logo Squadra (Opzionale)")
                 
                 if st.form_submit_button("Salva Squadra"):
                     if not nome_squadra:
