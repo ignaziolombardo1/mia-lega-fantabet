@@ -3,88 +3,74 @@ from supabase import create_client
 import uuid
 import pandas as pd
 
-# 1. Configurazione
+# Configurazione
 SUPABASE_URL = "https://jynplanvtoytucanxsbn.supabase.co"
 SUPABASE_KEY = "sb_publishable_kiM3YkFbdFcyLxB8a3Ok6w_rqGhdKHY"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. Configurazione Pagina e Stile (Sfondo)
-st.set_page_config(page_title="FantaBet", page_icon="⚽")
-# IMPORTANTE: Cambia 'tuo-utente' e 'tuo-repo' con i tuoi dati GitHub reali!
-st.markdown(
-    """
+st.set_page_config(page_title="FantaBet", page_icon="⚽", layout="wide")
+
+# CSS per abbellire le Card della classifica
+st.markdown("""
     <style>
-    .stApp {
-        background-image: url("https://raw.githubusercontent.com/tuo-utente/tuo-repo/main/background.jpg");
-        background-size: cover;
-    }
+    .card { background-color: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 15px; margin-bottom: 10px; border-left: 5px solid #2e7d32; }
+    .stApp { background-image: url("https://raw.githubusercontent.com/tuo-utente/tuo-repo/main/background.jpg"); background-size: cover; }
     </style>
-    """,
-    unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-st.title("⚽ Lega FantaBet")
-
-# 3. Gestione Password Admin
+# Protezione Admin
 def check_password():
-    if "password_correct" not in st.session_state:
-        st.session_state["password_correct"] = False
-    
-    if not st.session_state["password_correct"]:
+    if "admin" not in st.session_state: st.session_state.admin = False
+    if not st.session_state.admin:
         pwd = st.sidebar.text_input("Password Admin", type="password")
-        if st.sidebar.button("Accedi"):
-            if pwd == "Fantabet26": 
-                st.session_state["password_correct"] = True
-                st.rerun()
-            else:
-                st.sidebar.error("Password errata")
+        if st.sidebar.button("Entra"):
+            if pwd == "Fantabet26": st.session_state.admin = True; st.rerun()
         return False
     return True
 
-menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Admin: Gestione Squadre", "Admin: Inserisci Punteggi"])
+menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Admin: Gestione Squadre", "Admin: Gestione Punteggi"])
 
-# --- PAGINA CLASSIFICA ---
+# --- CLASSIFICA (Grafica Migliorata) ---
 if menu == "Classifica":
-    st.header("🏆 Classifica Generale")
-    risultati = supabase.table("risultati").select("*").execute().data
+    st.title("🏆 Classifica FantaBet")
     squadre = supabase.table("squadre").select("*").execute().data
+    risultati = supabase.table("risultati").select("*").execute().data
     
     if squadre:
-        data = []
+        classifica = []
         for s in squadre:
             punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
-            data.append({'Squadra': s['nome_squadra'], 'Punti': punti})
+            classifica.append({'nome': s['nome_squadra'], 'punti': punti})
         
-        df = pd.DataFrame(data).sort_values(by='Punti', ascending=False)
-        st.table(df)
-    else:
-        st.info("Nessuna squadra registrata.")
+        for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
+            with st.container():
+                st.markdown(f"""<div class="card">
+                    <h3>{pos}°. {item['nome']} - <b>{item['punti']} punti</b></h3>
+                </div>""", unsafe_allow_html=True)
 
-# --- PAGINA ADMIN ---
+# --- ADMIN (Gestione Dati) ---
 else:
     if check_password():
+        st.header("⚙️ Area Amministratore")
+        
+        # ELIMINA SQUADRE
         if menu == "Admin: Gestione Squadre":
-            st.header("Gestione Squadre")
-            with st.form("form_squadra"):
-                nome_squadra = st.text_input("Nome Squadra")
-                presidente = st.text_input("Presidente")
-                logo = st.file_uploader("Logo", type=['jpg', 'png'])
-                if st.form_submit_button("Salva"):
-                    # Logica upload
-                    logo_name = f"{uuid.uuid4()}.png" if logo else None
-                    if logo: supabase.storage.from_("leghe-fantabet").upload(logo_name, logo.getvalue())
-                    supabase.table("squadre").insert({"nome_squadra": nome_squadra, "presidente": presidente, "logo_url": logo_name}).execute()
-                    st.success("Squadra creata!")
+            squadre = supabase.table("squadre").select("*").execute().data
+            st.subheader("Elimina Squadra")
+            for s in squadre:
+                col1, col2 = st.columns([3, 1])
+                col1.write(s['nome_squadra'])
+                if col2.button("Elimina", key=f"del_{s['id']}"):
+                    supabase.table("squadre").delete().eq("id", s['id']).execute()
+                    st.rerun()
 
-        elif menu == "Admin: Inserisci Punteggi":
-            st.header("Inserisci Punteggi")
-            squadre_res = supabase.table("squadre").select("id, nome_squadra").execute().data
-            if squadre_res:
-                squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_res}
-                with st.form("form_punti"):
-                    squadra = st.selectbox("Squadra", list(squadra_dict.keys()))
-                    giornata = st.number_input("Giornata", 1, 38)
-                    punteggio = st.number_input("Punti", 0, 100)
-                    if st.form_submit_button("Salva"):
-                        supabase.table("risultati").insert({"squadra_id": squadra_dict[squadra], "giornata": giornata, "punteggio": punteggio}).execute()
-                        st.success("Punteggio salvato!")
+        # ELIMINA/CORREGGI PUNTEGGI
+        elif menu == "Admin: Gestione Punteggi":
+            st.subheader("Gestione Punteggi")
+            risultati = supabase.table("risultati").select("*, squadre(nome_squadra)").execute().data
+            for r in risultati:
+                col1, col2, col3 = st.columns([2, 1, 1])
+                col1.write(f"{r['squadre']['nome_squadra']} - Giornata {r['giornata']}: {r['punteggio']} pts")
+                if col3.button("Elimina", key=f"del_p_{r['id']}"):
+                    supabase.table("risultati").delete().eq("id", r['id']).execute()
+                    st.rerun()
