@@ -1,7 +1,5 @@
 import streamlit as st
 from supabase import create_client
-import uuid
-import pandas as pd
 import requests
 
 # 1. Configurazione Supabase
@@ -14,10 +12,8 @@ st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide"
 
 # 3. Funzione per validare il link immagine
 def get_valid_logo(url):
-    """Controlla se l'URL è un'immagine valida, altrimenti ritorna None."""
     if not url: return None
     try:
-        # Controlliamo solo le intestazioni per velocità
         response = requests.head(url, timeout=2)
         if response.status_code == 200 and 'image' in response.headers.get('Content-Type', ''):
             return url
@@ -65,9 +61,8 @@ if menu == "Classifica":
             classifica = []
             for s in squadre:
                 punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
-                # Usiamo la validazione automatica
                 valid_logo = get_valid_logo(s.get('logo_url'))
-                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': valid_logo})
+                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': valid_logo, 'id': s['id']})
             
             for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
                 logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "<span style='margin-right:15px; font-size:25px;'>⚽</span>"
@@ -75,9 +70,36 @@ if menu == "Classifica":
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold;">{item['nome']}</span>
                             <span style="color:#4CAF50; font-weight:bold;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
-    except Exception as e: st.error(f"Errore caricamento: {e}")
+        else:
+            st.info("Nessuna squadra registrata.")
+    except Exception as e: st.error(f"Errore caricamento classifica: {e}")
 
 else:
     if check_password():
-        # ... (Il resto delle TAB admin rimane identico) ...
-        # (Ometti il resto qui per brevità, incolla sopra e mantieni le tue tab)
+        st.title("⚙️ Area Admin")
+        tab1, tab2, tab3 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🗑️ Elimina"])
+        with tab1:
+            with st.form("form_squadra"):
+                n = st.text_input("Nome Squadra")
+                pres = st.text_input("Nome Presidente")
+                logo = st.text_input("URL Immagine Logo")
+                if st.form_submit_button("Salva Squadra"):
+                    supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
+                    st.rerun()
+        with tab2:
+            squadre_list = supabase.table("squadre").select("*").execute().data
+            if squadre_list:
+                squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
+                with st.form("form_punti"):
+                    sq = st.selectbox("Squadra", list(squadra_dict.keys()))
+                    p = st.number_input("Punti", step=1)
+                    if st.form_submit_button("Conferma"):
+                        supabase.table("risultati").insert({"squadra_id": squadra_dict[sq], "punteggio": p}).execute()
+                        st.rerun()
+        with tab3:
+            squadre_del = supabase.table("squadre").select("*").execute().data
+            for s in squadre_del:
+                if st.button(f"Elimina {s['nome_squadra']}", key=s['id']):
+                    supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
+                    supabase.table("squadre").delete().eq("id", s['id']).execute()
+                    st.rerun()
