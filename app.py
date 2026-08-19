@@ -12,6 +12,7 @@ st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide"
 # 3. Stile CSS con contrasto elevato e ombra nera forte
 st.markdown("""
     <style>
+    /* Sfondo principale con immagine e overlay scuro */
     .stApp { 
         background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); 
         background-size: cover; 
@@ -19,6 +20,7 @@ st.markdown("""
         background-position: center; 
     }
     
+    /* Tutti i testi generali in bianco con forte ombra scura */
     html, body, [class*="css"], p, span, label { 
         color: #FFFFFF !important; 
         text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8) !important;
@@ -29,6 +31,7 @@ st.markdown("""
         text-shadow: 3px 3px 6px rgba(0, 0, 0, 1), 0 0 15px rgba(0,0,0,0.9) !important; 
     }
     
+    /* Card della classifica */
     .card { 
         background-color: rgba(15, 15, 15, 0.9) !important; 
         padding: 15px !important; 
@@ -38,9 +41,11 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.8) !important; 
     }
     
+    /* Sidebar scura e leggibile */
     [data-testid="stSidebar"] { background-color: #111111 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.8) !important; }
     
+    /* Campi di input con testo nero su sfondo bianco */
     .stTextInput input, .stNumberInput input { 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
@@ -78,7 +83,10 @@ if menu == "Classifica":
                 logo_url = s.get('logo_url')
                 classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
             
-            for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
+            # ORDINAMENTO: Prima per punti (decrescente) e a parità di punti per nome alfabetico (A-Z)
+            classifica_ordinata = sorted(classifica, key=lambda x: (-x['punti'], x['nome']))
+            
+            for pos, item in enumerate(classifica_ordinata, 1):
                 if item['logo'] and item['logo'].startswith('http'):
                     logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' onerror=\"this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';\" />"
                 else:
