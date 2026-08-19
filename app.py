@@ -87,7 +87,7 @@ if menu == "Classifica":
                 st.markdown(f"""<div class="card"><div style="display:flex; align-items:center; width:100%;">
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold; font-size:18px;">{item['nome']}</span>
-                            <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=ico=True if 'ico' in locals() else True)
+                            <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
         else:
             st.info("Nessuna squadra registrata.")
     except Exception as e: st.error(f"Errore caricamento classifica: {e}")
@@ -108,7 +108,7 @@ else:
                 
                 if submit_sq:
                     if n:
-                        supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute(	)
+                        supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
                         st.success(f"✅ **Operazione completata!** La squadra **{n}** (Presidente: {pres if pres else 'Non specificato'}) è stata registrata con successo.")
                     else:
                         st.error("⚠️ Inserisci obbligatoriamente il nome della squadra.")
@@ -126,7 +126,7 @@ else:
                     
                     if submit_pts:
                         supabase.table("risultati").insert({"squadra_id": squadra_dict[sq], "punteggio": p}).execute()
-                        azione = "Aggiunti" if p >= 0 else " Tolti"
+                        azione = "Aggiunti" if p >= 0 else "Tolti"
                         st.success(f"✅ **Aggiornamento riuscito!** {azione} **{abs(p)} punti** alla squadra **{sq}**.")
             else:
                 st.warning("Registra prima almeno una squadra.")
