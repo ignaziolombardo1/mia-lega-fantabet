@@ -1,6 +1,9 @@
+# Definizione del contenuto completo e corretto dell'app Streamlit.
+# L'obiettivo è forzare lo sfondo, lo stile dei loghi e la leggibilità.
+
+app_code = """
 import streamlit as st
 from supabase import create_client
-import requests
 
 # 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
@@ -10,90 +13,103 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. CSS POTENTE (Forza tutto)
-st.markdown("""
+# 3. CSS DEFINITIVO: Forza lo sfondo su tutto l'app e gestisce i loghi
+st.markdown('''
     <style>
-    /* Sfondo nero per tutta la pagina */
-    .stApp { background-color: #000000 !important; }
+    /* Forza lo sfondo nero su tutto il container principale */
+    .stApp {
+        background-color: #000000 !important;
+    }
     
-    /* Forza il testo bianco ovunque */
-    h1, h2, h3, div, p, span, label { color: #FFFFFF !important; }
-    
-    /* Sidebar scura */
-    [data-testid="stSidebar"] { background-color: #1a1a1a !important; }
-    
-    /* Card Classifica */
-    .custom-card { 
-        background-color: #262626 !important; 
-        padding: 15px !important; 
-        border-radius: 10px !important; 
-        margin-bottom: 10px !important; 
-        border-left: 6px solid #4CAF50 !important; 
+    /* Forza il colore bianco su tutti i testi */
+    h1, h2, h3, div, p, span, label, input {
+        color: #FFFFFF !important;
+    }
+
+    /* Sidebar Nera */
+    [data-testid="stSidebar"] {
+        background-color: #0f0f0f !important;
+    }
+
+    /* Card Squadra - Layout pulito */
+    .custom-card {
+        background-color: #1a1a1a !important;
+        border: 1px solid #333333 !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
+        margin-bottom: 15px !important;
         display: flex !important;
         align-items: center !important;
-        width: 100% !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3) !important;
+    }
+
+    /* Stile Logo - Cerchio perfetto */
+    .logo-container {
+        width: 50px !important;
+        height: 50px !important;
+        border-radius: 50% !important;
+        overflow: hidden !important;
+        margin-right: 20px !important;
+        background-color: #333 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     
-    /* Logo circolare */
-    .logo-img { 
-        width: 40px !important; 
-        height: 40px !important; 
-        border-radius: 50% !important; 
-        object-fit: cover !important; 
-        margin-right: 15px !important;
+    .logo-img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
     }
     </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
-# 4. Funzione Logo
-def get_logo_html(url):
-    if url and url.startswith("http"):
-        return f'<img src="{url}" class="logo-img">'
-    return '<span style="font-size:30px; margin-right:15px;">⚽</span>'
-
-# 5. Logica Accesso
+# 4. Logica Accesso
 if "admin" not in st.session_state: st.session_state.admin = False
-
 menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Area Admin"])
 
+# 5. Funzione renderizzazione Squadra
+def render_squadra_card(pos, nome, punti, logo_url):
+    logo_content = f'<img src="{logo_url}" class="logo-img">' if logo_url and logo_url.startswith('http') else '<span style="font-size:24px;">⚽</span>'
+    st.markdown(f'''
+        <div class="custom-card">
+            <span style="font-weight:bold; font-size:18px; margin-right:20px;">{pos}°</span>
+            <div class="logo-container">{logo_content}</div>
+            <span style="flex-grow:1; font-weight:bold; font-size:20px;">{nome}</span>
+            <span style="color:#4CAF50; font-weight:bold; font-size:20px;">{punti} pts</span>
+        </div>
+    ''', unsafe_allow_html=True)
+
 if menu == "Classifica":
-    st.markdown("# 🏆 Classifica Generale")
-    squadre = supabase.table("squadre").select("*").execute().data
-    risultati = supabase.table("risultati").select("*").execute().data
-    
-    if squadre:
-        # Calcolo punti
-        classifica = []
-        for s in squadre:
-            punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
-            classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': s.get('logo_url')})
+    st.title("🏆 Classifica Generale")
+    try:
+        squadre = supabase.table("squadre").select("*").execute().data
+        risultati = supabase.table("risultati").select("*").execute().data
         
-        # Mostra in ordine
-        for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
-            logo_html = get_logo_html(item['logo'])
-            st.markdown(f"""
-                <div class="custom-card">
-                    <span style="font-weight:bold; margin-right:20px;">{pos}°</span>
-                    {logo_html}
-                    <span style="flex-grow:1; font-weight:bold; font-size:18px;">{item['nome']}</span>
-                    <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span>
-                </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.write("Nessuna squadra registrata.")
+        if squadre:
+            classifica = []
+            for s in squadre:
+                punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
+                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': s.get('logo_url')})
+            
+            for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
+                render_squadra_card(pos, item['nome'], item['punti'], item['logo'])
+        else:
+            st.write("Nessuna squadra presente.")
+    except Exception as e:
+        st.error(f"Errore: {e}")
 
 else:
-    # Area Admin
+    # Area Admin (Semplicizzata per stabilità)
     if not st.session_state.admin:
         pwd = st.sidebar.text_input("Password", type="password")
         if st.sidebar.button("Entra"):
             if pwd == "capeta63": st.session_state.admin = True; st.rerun()
     else:
         st.title("⚙️ Amministrazione")
-        # Tab semplici per evitare conflitti di layout
-        tab1, tab2 = st.tabs(["➕ Nuova Squadra", "⚽ Inserisci Punti"])
+        tab1, tab2 = st.tabs(["➕ Nuova Squadra", "⚽ Punteggi"])
         with tab1:
-            with st.form("squadra"):
+            with st.form("new_sq"):
                 n = st.text_input("Nome Squadra")
                 l = st.text_input("URL Logo")
                 if st.form_submit_button("Salva"):
@@ -102,10 +118,15 @@ else:
         with tab2:
             sqs = supabase.table("squadre").select("*").execute().data
             if sqs:
-                with st.form("punti"):
-                    s = st.selectbox("Squadra", [x['nome_squadra'] for x in sqs])
+                with st.form("new_pts"):
+                    sel = st.selectbox("Squadra", [x['nome_squadra'] for x in sqs])
                     p = st.number_input("Punti", step=1)
-                    if st.form_submit_button("Aggiungi"):
-                        sid = next(x['id'] for x in sqs if x['nome_squadra'] == s)
+                    if st.form_submit_button("Salva"):
+                        sid = next(x['id'] for x in sqs if x['nome_squadra'] == sel)
                         supabase.table("risultati").insert({"squadra_id": sid, "punteggio": p}).execute()
                         st.rerun()
+"""
+
+# Scrittura su file app.py
+with open("app.py", "w") as f:
+    f.write(app_code)
