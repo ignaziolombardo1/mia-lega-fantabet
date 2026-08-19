@@ -138,17 +138,21 @@ elif menu == "📅 Schedine per Giornata":
         
         if squadre:
             for s in sorted(squadre, key=lambda x: x['nome_squadra']):
-                # Mostra il logo della squadra anche qui se disponibile
+                # Mostra il logo della squadra se disponibile
                 logo_s = s.get('logo_url')
                 logo_tag = f"<img src='{logo_s}' style='width:30px; height:30px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:8px;' />" if logo_s and logo_s.startswith('http') else "🛡️ "
                 
-                st.markdown(f"### {logo_tag} {s['nome_squadra']}")
+                st.markdown(f"### {logo_tag} {s['nome_squadra']}, unsafe_allow_html=True")
                 url_schedina = schedine_dict.get(s['id'])
                 
-                if url_schedina and url_schedina.startswith('http'):
-                    st.image(url_schedina, caption=f"Schedina {s['nome_squadra']} - {giornata_scelta}", use_container_width=True)
+                # Controllo di sicurezza per mostrare correttamente l'immagine ed evitare testo grezzo
+                if url_schedina and url_schedina.startswith('http') and any(url_schedina.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.webp']):
+                    try:
+                        st.image(url_schedina, caption=f"Schedina {s['nome_squadra']} - {giornata_scelta}", use_container_width=True)
+                    except:
+                        st.warning(f"Impossibile visualizzare l'immagine per {s['nome_squadra']}.")
                 else:
-                    st.info(f"Nessuna schedina caricata per {s['nome_squadra']} in questa giornata.")
+                    st.info(f"Nessuna schedina valida caricata per {s['nome_squadra']} in questa giornata.")
                 st.markdown("---")
         else:
             st.info("Nessuna squadra registrata.")
@@ -210,7 +214,6 @@ elif menu == "Area Admin":
                         num_g = int(giornata_admin.split(" ")[1])
                         s_id = squadra_dict[sq_schedina]
                         
-                        # Controlla se esiste già una schedina per questa squadra in questa giornata
                         esistente = supabase.table("schedine").select("*").eq("squadra_id", s_id).eq("giornata", num_g).execute().data
                         
                         if esistente:
