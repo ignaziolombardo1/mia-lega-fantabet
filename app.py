@@ -11,7 +11,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS (Sidebar nera e campi input ottimizzati)
+# 3. Stile CSS (Sidebar scura ma leggibile)
 st.markdown("""
     <style>
     /* Testo generale bianco */
@@ -24,23 +24,22 @@ st.markdown("""
     /* SFONDO PRINCIPALE */
     .stApp { background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; background-position: center; }
     
-    /* SIDEBAR NERA CON SCRITTE BIANCHE */
+    /* SIDEBAR NERA */
     [data-testid="stSidebar"] {
         background-color: #111111 !important;
     }
-    [data-testid="stSidebar"] * {
+    /* Solo i titoli/testi nella sidebar sono bianchi, i selettori mantengono il loro stile standard */
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
         color: #FFFFFF !important;
     }
     
-    /* CAMPI DI INPUT: Testo NERO su fondo bianco */
-    .stTextInput > div > div > input, 
-    .stNumberInput > div > div > input, 
-    .stSelectbox > div > div > div { 
+    /* CAMPI DI INPUT (Form registrazione e admin): Testo NERO su fondo bianco */
+    .stTextInput input, .stNumberInput input { 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
         font-weight: bold;
     }
-    /* Label dei campi di input bianche */
+    /* Etichette dei campi bianche */
     label { color: #FFFFFF !important; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
@@ -146,4 +145,3 @@ else:
                     st.write("Nessun punteggio da eliminare.")
             except Exception as e:
                 st.error(f"Errore caricamento risultati: {e}")
-                
