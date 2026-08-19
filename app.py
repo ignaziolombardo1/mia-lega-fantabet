@@ -39,7 +39,7 @@ st.markdown("""
         align-items: center;
     }
     .stApp { 
-        background-image: url("aaaaaaaaaaaaaaaaaaaaaaa"); 
+        background-image: url("https://github.com/ignaziolombardo1/mia-lega-fantabet/blob/de0d9af981fb75ed84e96f7e7b6275b21c144002/background.jpg"); 
         background-size: cover; 
         background-attachment: fixed;
     }
