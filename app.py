@@ -12,7 +12,6 @@ st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide"
 # 3. Stile CSS con contrasto elevato e ombra nera forte
 st.markdown("""
     <style>
-    /* Sfondo principale con immagine e overlay scuro */
     .stApp { 
         background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); 
         background-size: cover; 
@@ -20,7 +19,6 @@ st.markdown("""
         background-position: center; 
     }
     
-    /* Tutti i testi generali in bianco con forte ombra scura */
     html, body, [class*="css"], p, span, label { 
         color: #FFFFFF !important; 
         text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8) !important;
@@ -31,7 +29,6 @@ st.markdown("""
         text-shadow: 3px 3px 6px rgba(0, 0, 0, 1), 0 0 15px rgba(0,0,0,0.9) !important; 
     }
     
-    /* Card della classifica */
     .card { 
         background-color: rgba(15, 15, 15, 0.9) !important; 
         padding: 15px !important; 
@@ -41,11 +38,9 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.8) !important; 
     }
     
-    /* Sidebar scura e leggibile */
     [data-testid="stSidebar"] { background-color: #111111 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.8) !important; }
     
-    /* Campi di input con testo nero su sfondo bianco */
     .stTextInput input, .stNumberInput input { 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
@@ -84,7 +79,6 @@ if menu == "Classifica":
                 classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
             
             for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
-                # Gestione diretta del logo senza blocchi di rete superflui
                 if item['logo'] and item['logo'].startswith('http'):
                     logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' onerror=\"this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';\" />"
                 else:
@@ -93,7 +87,7 @@ if menu == "Classifica":
                 st.markdown(f"""<div class="card"><div style="display:flex; align-items:center; width:100%;">
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold; font-size:18px;">{item['nome']}</span>
-                            <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
+                            <span style="color:#4CAF50; font-weight:bold; font-size:18px;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=ico=True if 'ico' in locals() else True)
         else:
             st.info("Nessuna squadra registrata.")
     except Exception as e: st.error(f"Errore caricamento classifica: {e}")
@@ -110,15 +104,16 @@ else:
                 n = st.text_input("Nome Squadra")
                 pres = st.text_input("Nome Presidente")
                 logo = st.text_input("URL Immagine Logo (Link diretto)")
-                if st.form_submit_button("Salva Squadra"):
+                submit_sq = st.form_submit_button("Salva Squadra")
+                
+                if submit_sq:
                     if n:
-                        supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
-                        st.success(f"Squadra '{n}' registrata con successo!")
-                        st.rerun()
+                        supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute(	)
+                        st.success(f"✅ **Operazione completata!** La squadra **{n}** (Presidente: {pres if pres else 'Non specificato'}) è stata registrata con successo.")
                     else:
-                        st.error("Inserisci il nome della squadra.")
+                        st.error("⚠️ Inserisci obbligatoriamente il nome della squadra.")
 
-        # TAB 2: Gestisci Punteggi (Aggiungi o Leva punti)
+        # TAB 2: Gestisci Punteggi
         with tab2:
             squadre_list = supabase.table("squadre").select("*").execute().data
             if squadre_list:
@@ -127,10 +122,12 @@ else:
                     st.subheader("Modifica Punteggio Squadra")
                     sq = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()))
                     p = st.number_input("Punti (positivo per aggiungere, negativo es. -3 per togliere)", step=1, value=0)
-                    if st.form_submit_button("Aggiorna Punteggio"):
+                    submit_pts = st.form_submit_button("Aggiorna Punteggio")
+                    
+                    if submit_pts:
                         supabase.table("risultati").insert({"squadra_id": squadra_dict[sq], "punteggio": p}).execute()
-                        st.success("Punteggio aggiornato!")
-                        st.rerun()
+                        azione = "Aggiunti" if p >= 0 else " Tolti"
+                        st.success(f"✅ **Aggiornamento riuscito!** {azione} **{abs(p)} punti** alla squadra **{sq}**.")
             else:
                 st.warning("Registra prima almeno una squadra.")
 
@@ -147,7 +144,7 @@ else:
                         if st.button(f"Elimina", key=f"del_{s['id']}"):
                             supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
                             supabase.table("squadre").delete().eq("id", s['id']).execute()
-                            st.success("Squadra eliminata!")
+                            st.success(f"🗑️ Squadra **{s['nome_squadra']}** eliminata correttamente.")
                             st.rerun()
             else:
                 st.info("Nessuna squadra presente da eliminare.")
