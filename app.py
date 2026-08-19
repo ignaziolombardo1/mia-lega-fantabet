@@ -34,7 +34,7 @@ with st.sidebar:
         st.success("Accesso Effettuato")
         if st.button("Logout"): st.session_state.admin = False; st.rerun()
         
-        tab1, tab2, tab3 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina"])
+        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina", "🗑️ Elimina"])
         squadre_list = supabase.table("squadre").select("*").execute().data
         
         with tab1:
@@ -56,6 +56,15 @@ with st.sidebar:
                 if st.form_submit_button("Carica"):
                     s_id = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_s)
                     supabase.table("schedine").insert({"squadra_id": s_id, "giornata": int(g.split()[1]), "schedina_url": u_sch}).execute(); st.rerun()
+        with tab4:
+            st.write("### Elimina Elementi")
+            sq_del = st.selectbox("Squadra da eliminare", [s['nome_squadra'] for s in squadre_list])
+            if st.button("Conferma Eliminazione Squadra"):
+                s_id = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_del)
+                supabase.table("squadre").delete().eq("id", s_id).execute()
+                supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
+                supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
+                st.rerun()
 
 # --- MENU CENTRALE ---
 c1, c2, c3 = st.columns([1, 1, 2])
