@@ -40,7 +40,7 @@ st.markdown("""
         display: flex;
         align-items: center;
     }
-    /* Sfondo oscurato al 80% */
+    /* Sfondo oscurato al 85% */
     .stApp { 
         background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); 
         background-size: cover; 
@@ -74,8 +74,11 @@ menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Area Admin"])
 if menu == "Classifica":
     st.title("🏆 Classifica Generale FantaBet")
     try:
-        squadre = supabase.table("squadre").select("*").execute().data
-        risultati = supabase.table("risultati").select("*").execute().data
+        squadre_res = supabase.table("squadre").select("*").execute()
+        risultati_res = supabase.table("risultati").select("*").execute()
+        squadre = squadre_res.data if squadre_res else []
+        risultati = risultati_res.data if risultati_res else []
+        
         if squadre:
             classifica = []
             for s in squadre:
@@ -87,30 +90,61 @@ if menu == "Classifica":
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold;">{item['nome']}</span>
                             <span style="color:#4CAF50; font-weight:bold;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
-    except Exception as e: st.error(f"Errore: {e}")
+        else:
+            st.info("Nessuna squadra ancora registrata.")
+    except Exception as e: 
+        st.error(f"Errore caricamento classifica: {e}")
 
 else:
     if check_password():
         st.title("⚙️ Area Admin")
         tab1, tab2, tab3 = st.tabs(["➕ Squadre", "⚽ Punteggi", "🗑️ Elimina"])
+        
         with tab1:
             with st.form("f1"):
                 n = st.text_input("Nome Squadra")
                 if st.form_submit_button("Salva"):
-                    supabase.table("squadre").insert({"nome_squadra": n}).execute()
-                    st.rerun()
-        with tab2:
-            squadre_list = supabase.table("squadre").select("id, nome_squadra").execute().data
-            if squadre_list:
-                with st.form("f2"):
-                    sq = st.selectbox("Squadra", {s["nome_squadra"]: s["id"] for s in squadre_list})
-                    p = st.number_input("Punti", step=1)
-                    if st.form_submit_button("Aggiungi"):
-                        supabase.table("risultati").insert({"squadra_id": {s["nome_squadra"]: s["id"] for s in squadre_list}[sq], "punteggio": p}).execute()
+                    if n:
+                        supabase.table("squadre").insert({"nome_squadra": n}).execute()
+                        st.success("Squadra salvata!")
                         st.rerun()
+                    else:
+                        st.error("Inserisci un nome valido.")
+                        
+        with tab2:
+            try:
+                squadre_res = supabase.table("squadre").select("*").execute()
+                squadre_list = squadre_res.data if squadre_res else []
+                if squadre_list:
+                    squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
+                    with st.form("f2"):
+                        sq = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()))
+                        p = st.number_input("Punti da assegnare", step=1, format="%d")
+                        if st.form_submit_button("Aggiungi"):
+                            supabase.table("risultati").insert({
+                                "squadra_id": squadra_dict[sq], 
+                                "punteggio": p,
+                                "giornata": 1
+                            }).execute()
+                            st.success("Punteggio aggiunto!")
+                            st.rerun()
+                else:
+                    st.warning("Prima registra almeno una squadra nella scheda 'Squadre'.")
+            except Exception as e:
+                st.error(f"Errore nel caricamento: {e}")
+                
         with tab3:
-            ris = supabase.table("risultati").select("*").execute().data
-            for r in ris:
-                if st.button(f"Elimina punteggio {r['punteggio']}", key=r['id']):
-                    supabase.table("risultati").delete().eq("id", r['id']).execute()
-                    st.rerun()
+            try:
+                ris_res = supabase.table("risultati").select("*").execute()
+                ris = ris_res.data if ris_res else []
+                if ris:
+                    for r in ris:
+                        if st.button(f"Elimina ID {r['id'][:4]}... (Punti: {r['punteggio']})", key=r['id']):
+                            supabase.table("risultati").delete().eq("id", r['id']).execute()
+                            st.success("Punteggio eliminato!")
+                            st.rerun()
+                else:
+                    st.write("Nessun punteggio da eliminare.")
+            except Exception as e:
+                st.error(f"Errore: {e}")
+                
