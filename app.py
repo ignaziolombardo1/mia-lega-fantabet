@@ -31,7 +31,7 @@ st.markdown("""
         text-shadow: 3px 3px 6px rgba(0, 0, 0, 1), 0 0 15px rgba(0,0,0,0.9) !important; 
     }
     
-    /* Card della classifica */
+    /* Card della classifica e schedine */
     .card { 
         background-color: rgba(15, 15, 15, 0.9) !important; 
         padding: 15px !important; 
@@ -69,7 +69,7 @@ def check_password():
         return False
     return True
 
-menu = st.sidebar.selectbox("Navigazione", ["Classifica", "Area Admin"])
+menu = st.sidebar.selectbox("Navigazione", ["Classifica", "📅 Schedine per Giornata", "Area Admin"])
 
 if menu == "Classifica":
     st.title("🏆 Classifica Generale FantaBet")
@@ -83,7 +83,7 @@ if menu == "Classifica":
                 logo_url = s.get('logo_url')
                 classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
             
-            # ORDINAMENTO: Prima per punti (decrescente) e a parità di punti per nome alfabetico (A-Z)
+            # Ordinamento: Prima per punti decrescente, poi alfabetico
             classifica_ordinata = sorted(classifica, key=lambda x: (-x['punti'], x['nome']))
             
             for pos, item in enumerate(classifica_ordinata, 1):
@@ -100,10 +100,37 @@ if menu == "Classifica":
             st.info("Nessuna squadra registrata.")
     except Exception as e: st.error(f"Errore caricamento classifica: {e}")
 
+elif menu == "📅 Schedine per Giornata":
+    st.title("📅 Schedine delle Squadre")
+    giornata_scelta = st.selectbox("Seleziona la Giornata di Campionato", [f"Giornata {i}" for i in range(1, 39)])
+    num_giornata = int(giornata_scelta.split(" ")[1])
+    
+    try:
+        squadre = supabase.table("squadre").select("*").execute().data
+        schedine = supabase.table("schedine").select("*").eq("giornata", num_giornata).execute().data
+        
+        # Mappa le schedine per squadra_id
+        schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
+        
+        if squadre:
+            for s in sorted(squadre, key=lambda x: x['nome_squadra']):
+                st.markdown(f"### 🛡️ {s['nome_squadra']}")
+                url_schedina = schedine_dict.get(s['id'])
+                
+                if url_schedina and url_schedina.startswith('http'):
+                    st.image(url_schedina, caption=f"Schedina {s['nome_squadra']} - {giornata_scelta}", use_container_width=True)
+                else:
+                    st.info(f"Nessuna schedina caricata per {s['nome_squadra']} in questa giornata.")
+                st.markdown("---")
+        else:
+            st.info("Nessuna squadra registrata.")
+    except Exception as e:
+        st.error(f"Errore nel caricamento delle schedine: {e}")
+
 else:
     if check_password():
         st.title("⚙️ Area Admin")
-        tab1, tab2, tab3 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🗑️ Elimina Squadre"])
+        tab1, tab2, tab3, tab4 = st.tabs(["➕ Registra Squadra", "⚽ Gestisci Punteggi", "🎫 Carica Schedina", "🗑️ Elimina Squadre"])
         
         # TAB 1: Registra Squadra
         with tab1:
@@ -117,7 +144,7 @@ else:
                 if submit_sq:
                     if n:
                         supabase.table("squadre").insert({"nome_squadra": n, "presidente": pres, "logo_url": logo}).execute()
-                        st.success(f"✅ **Operazione completata!** La squadra **{n}** (Presidente: {pres if pres else 'Non specificato'}) è stata registrata con successo.")
+                        st.success(f"✅ **Operazione completata!** La squadra **{n}** è stata registrata con successo.")
                     else:
                         st.error("⚠️ Inserisci obbligatoriamente il nome della squadra.")
 
@@ -139,8 +166,38 @@ else:
             else:
                 st.warning("Registra prima almeno una squadra.")
 
-        # TAB 3: Elimina Squadre
+        # TAB 3: Carica Schedina per Giornata
         with tab3:
+            squadre_list = supabase.table("squadre").select("*").execute().data
+            if squadre_list:
+                squadra_dict = {s["nome_squadra"]: s["id"] for s in squadre_list}
+                with st.form("form_schedina_admin"):
+                    st.subheader("Carica Schedina Giornaliera")
+                    giornata_admin = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_adm")
+                    sq_schedina = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()), key="s_adm")
+                    url_sch = st.text_input("URL Immagine Schedina (Link diretto)")
+                    submit_sch = st.form_submit_button("Salva Schedina")
+                    
+                    if submit_sch:
+                        num_g = int(giornata_admin.split(" ")[1])
+                        s_id = squadra_dict[sq_schedina]
+                        
+                        # Controlla se esiste già una schedina per questa squadra in questa giornata
+                        esistente = supabase.table("schedine").select("*").eq("squadra_id", s_id).eq("giornata", num_g).execute().data
+                        
+                        if esistente:
+                            # Aggiorna
+                            supabase.table("schedine").update({"schedina_url": url_sch}).eq("squadra_id", s_id).eq("giornata", num_g).execute()
+                        else:
+                            # Inserisci nuova
+                            supabase.table("schedine").insert({"squadra_id": s_id, "giornata": num_g, "schedina_url": url_sch}).execute()
+                            
+                        st.success(f"✅ Schedina di **{sq_schedina}** per la **{giornata_admin}** caricata con successo!")
+            else:
+                st.warning("Registra prima almeno una squadra.")
+
+        # TAB 4: Elimina Squadre
+        with tab4:
             st.subheader("Elimina Squadre dal Database")
             squadre_del = supabase.table("squadre").select("*").execute().data
             if squadre_del:
@@ -151,6 +208,7 @@ else:
                     with col2:
                         if st.button(f"Elimina", key=f"del_{s['id']}"):
                             supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
+                            supabase.table("schedine").delete().eq("squadra_id", s['id']).execute()
                             supabase.table("squadre").delete().eq("id", s['id']).execute()
                             st.success(f"🗑️ Squadra **{s['nome_squadra']}** eliminata correttamente.")
                             st.rerun()
