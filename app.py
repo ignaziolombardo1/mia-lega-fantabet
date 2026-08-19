@@ -11,18 +11,26 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS (Scritte nere nei campi di input)
+# 3. Stile CSS (Sidebar nera e campi input ottimizzati)
 st.markdown("""
     <style>
     /* Testo generale bianco */
     html, body, [class*="css"] { color: #FFFFFF !important; }
     h1, h2, h3, h4 { color: #FFFFFF !important; text-shadow: 3px 3px 6px rgba(0, 0, 0, 1) !important; }
     
-    /* Card */
+    /* CARD CLASSIFICA */
     .card { background-color: rgba(0, 0, 0, 0.85) !important; padding: 15px !important; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid #4CAF50; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     
-    /* Sfondo */
+    /* SFONDO PRINCIPALE */
     .stApp { background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; background-position: center; }
+    
+    /* SIDEBAR NERA CON SCRITTE BIANCHE */
+    [data-testid="stSidebar"] {
+        background-color: #111111 !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
     
     /* CAMPI DI INPUT: Testo NERO su fondo bianco */
     .stTextInput > div > div > input, 
@@ -138,3 +146,4 @@ else:
                     st.write("Nessun punteggio da eliminare.")
             except Exception as e:
                 st.error(f"Errore caricamento risultati: {e}")
+                
