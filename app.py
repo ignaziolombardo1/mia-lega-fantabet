@@ -1,6 +1,5 @@
 import streamlit as st
 from supabase import create_client
-import requests
 
 # 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
@@ -10,18 +9,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Funzione per validare il link immagine
-def get_valid_logo(url):
-    if not url: return None
-    try:
-        response = requests.head(url, timeout=2)
-        if response.status_code == 200 and 'image' in response.headers.get('Content-Type', ''):
-            return url
-    except:
-        pass
-    return None
-
-# 4. Stile CSS con contrasto elevato e ombra nera forte per la massima leggibilità
+# 3. Stile CSS con contrasto elevato e ombra nera forte
 st.markdown("""
     <style>
     /* Sfondo principale con immagine e overlay scuro */
@@ -32,7 +20,7 @@ st.markdown("""
         background-position: center; 
     }
     
-    /* Tutti i testi generali in bianco con forte ombra scura per staccare dallo sfondo */
+    /* Tutti i testi generali in bianco con forte ombra scura */
     html, body, [class*="css"], p, span, label { 
         color: #FFFFFF !important; 
         text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.8) !important;
@@ -57,7 +45,7 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #111111 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; text-shadow: 1px 1px 3px rgba(0,0,0,0.8) !important; }
     
-    /* Campi di input con testo nero su sfondo bianco per una digitazione perfetta */
+    /* Campi di input con testo nero su sfondo bianco */
     .stTextInput input, .stNumberInput input { 
         color: #000000 !important; 
         background-color: #FFFFFF !important; 
@@ -66,7 +54,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 5. Logica Accesso
+# 4. Logica Accesso
 def check_password():
     if "admin" not in st.session_state: st.session_state.admin = False
     if not st.session_state.admin:
@@ -92,11 +80,16 @@ if menu == "Classifica":
             classifica = []
             for s in squadre:
                 punti = sum([int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']])
-                valid_logo = get_valid_logo(s.get('logo_url'))
-                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': valid_logo, 'id': s['id']})
+                logo_url = s.get('logo_url')
+                classifica.append({'nome': s['nome_squadra'], 'punti': punti, 'logo': logo_url, 'id': s['id']})
             
             for pos, item in enumerate(sorted(classifica, key=lambda x: x['punti'], reverse=True), 1):
-                logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "<span style='margin-right:15px; font-size:25px;'>⚽</span>"
+                # Gestione diretta del logo senza blocchi di rete superflui
+                if item['logo'] and item['logo'].startswith('http'):
+                    logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' onerror=\"this.onerror=null;this.src='https://images.emojiterra.com/google/android-11/512px/26bd.png';\" />"
+                else:
+                    logo_html = "<span style='margin-right:15px; font-size:25px;'>⚽</span>"
+                
                 st.markdown(f"""<div class="card"><div style="display:flex; align-items:center; width:100%;">
                             <span style="font-weight:bold; width:35px;">{pos}°</span>{logo_html}
                             <span style="flex-grow:1; font-weight:bold; font-size:18px;">{item['nome']}</span>
@@ -133,8 +126,7 @@ else:
                 with st.form("form_punti"):
                     st.subheader("Modifica Punteggio Squadra")
                     sq = st.selectbox("Seleziona Squadra", list(squadra_dict.keys()))
-                    # Usiamo un numero che può essere positivo o negativo per aggiungere o levare
-                    p = st.number_input("Punti (inserisci un numero positivo per aggiungere, negativo es. -3 per togliere)", step=1, value=0)
+                    p = st.number_input("Punti (positivo per aggiungere, negativo es. -3 per togliere)", step=1, value=0)
                     if st.form_submit_button("Aggiorna Punteggio"):
                         supabase.table("risultati").insert({"squadra_id": squadra_dict[sq], "punteggio": p}).execute()
                         st.success("Punteggio aggiornato!")
@@ -153,7 +145,6 @@ else:
                         st.write(f"**{s['nome_squadra']}** (Presidente: {s.get('presidente', 'N/D')})")
                     with col2:
                         if st.button(f"Elimina", key=f"del_{s['id']}"):
-                            # Elimina prima i risultati collegati per integrità, poi la squadra
                             supabase.table("risultati").delete().eq("squadra_id", s['id']).execute()
                             supabase.table("squadre").delete().eq("id", s['id']).execute()
                             st.success("Squadra eliminata!")
