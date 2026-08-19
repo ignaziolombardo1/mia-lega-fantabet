@@ -8,10 +8,9 @@ SUPABASE_URL = "https://jynplanvtoytucanxsbn.supabase.co"
 SUPABASE_KEY = "sb_publishable_kiM3YkFbdFcyLxB8a3Ok6w_rqGhdKHY"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. Configurazione Pagina e Stile Grafico
+# 2. Configurazione Pagina e Stile Grafico con Sfondo Personalizzato
 st.set_page_config(page_title="FantaBet", page_icon="⚽", layout="wide")
 
-# IMPORTANTE: Ricordati di sostituire 'tuo-utente' e 'tuo-repo' con il tuo link GitHub reale dell'immagine background.jpg
 st.markdown("""
     <style>
     .card { 
@@ -23,7 +22,7 @@ st.markdown("""
         color: #000000;
     }
     .stApp { 
-        background-image: url("https://raw.githubusercontent.com/tuo-utente/tuo-repo/main/background.jpg"); 
+        background-image: url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/4a866b472531ce29775b4ff679efa3b806c5ba47/background.jpg"); 
         background-size: cover; 
         background-attachment: fixed;
     }
@@ -37,7 +36,7 @@ def check_password():
     if not st.session_state.admin:
         pwd = st.sidebar.text_input("Password Admin", type="password")
         if st.sidebar.button("Entra"):
-            if pwd == "Capeta63": # Puoi cambiare la password qui
+            if pwd == "capeta63": 
                 st.session_state.admin = True
                 st.rerun()
             else:
@@ -130,7 +129,6 @@ else:
                     valore = st.number_input("Quantità Punti", min_value=0, step=1, format="%d")
                     
                     if st.form_submit_button("Conferma"):
-                        # Se l'utente sceglie di togliere, rendiamo il punteggio negativo
                         punteggio_finale = -valore if operazione == "Togli Punti (-)" else valore
                         
                         supabase.table("risultati").insert({
