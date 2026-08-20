@@ -9,12 +9,13 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS (Luminosità dello sfondo aumentata)
+# 3. Stile CSS
 st.markdown("""
     <style>
     .stApp { background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; }
     h1, h2, h3 { color: #FFFFFF !important; text-shadow: 3px 3px 6px rgba(0, 0, 0, 1); }
     .card { background-color: rgba(15, 15, 15, 0.85) !important; padding: 15px !important; border-radius: 12px !important; margin-bottom: 12px !important; border-left: 5px solid #4CAF50 !important; }
+    .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 25px; box-shadow: 0px 0px 20px rgba(255, 215, 0, 0.4); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -190,10 +191,25 @@ elif st.session_state.current_page == "Coppa Inverno":
         
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
-        if classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
-            st.success(f"🏆 Vincitore Coppa Inverno: {classifica_ordinata[0]['nome']} con {classifica_ordinata[0]['punti']} punti!")
+        # Controlliamo se sono stati inseriti risultati per la giornata 18 o successive (per decretare il vincitore ufficiale)
+        giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
+        torneo_concluso = any(g >= 18 for g in giornate_inserite)
+        
+        if torneo_concluso and classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
+            vincitore = classifica_ordinata[0]
+            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:90px; height:90px; border-radius:50%; object-fit:cover; border: 3px solid #FFD700; margin-bottom: 10px;' />" if vincitore['logo'] else "🏆"
+            st.markdown(f"""
+                <div class="winner-card">
+                    <h2 style="color: #FFD700 !important; margin-bottom: 15px;">🏆 Vincitore Coppa Inverno 🏆</h2>
+                    {logo_vincitore}
+                    <h1 style="color: #FFFFFF !important; margin: 5px 0;">{vincitore['nome']}</h1>
+                    <p style="color: #4CAF50; font-size: 18px; font-weight: bold; margin: 0;">Con {vincitore['punti']} punti</p>
+                </div>
+            """, unsafe_allow_html=True)
+            st.balloons()
         
         st.markdown("---")
+        st.markdown("### Classifica Parziale Coppa Inverno")
         for pos, item in enumerate(classifica_ordinata, 1):
             logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽"
             st.markdown(f"""<div class="card"><div style="display:flex; align-items:center;">
@@ -218,10 +234,25 @@ elif st.session_state.current_page == "Coppa Primavera":
         
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
-        if classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
-            st.success(f"🏆 Vincitore Coppa Primavera: {classifica_ordinata[0]['nome']} con {classifica_ordinata[0]['punti']} punti!")
+        # Controlliamo se sono stati inseriti risultati per la giornata 33 o successive
+        giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
+        torneo_concluso = any(g >= 33 for g in giornate_inserite)
+        
+        if torneo_concluso and classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
+            vincitore = classifica_ordinata[0]
+            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:90px; height:90px; border-radius:50%; object-fit:cover; border: 3px solid #FFD700; margin-bottom: 10px;' />" if vincitore['logo'] else "🏆"
+            st.markdown(f"""
+                <div class="winner-card">
+                    <h2 style="color: #FFD700 !important; margin-bottom: 15px;">🏆 Vincitore Coppa Primavera 🏆</h2>
+                    {logo_vincitore}
+                    <h1 style="color: #FFFFFF !important; margin: 5px 0;">{vincitore['nome']}</h1>
+                    <p style="color: #4CAF50; font-size: 18px; font-weight: bold; margin: 0;">Con {vincitore['punti']} punti</p>
+                </div>
+            """, unsafe_allow_html=True)
+            st.balloons()
         
         st.markdown("---")
+        st.markdown("### Classifica Parziale Coppa Primavera")
         for pos, item in enumerate(classifica_ordinata, 1):
             logo_html = f"<img src='{item['logo']}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽"
             st.markdown(f"""<div class="card"><div style="display:flex; align-items:center;">
