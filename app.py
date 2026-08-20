@@ -229,13 +229,15 @@ with st.sidebar:
             st.caption("Seleziona la giornata e carica le foto per tutte le squadre comodamente insieme.")
             
             if squadre:
+                # Ordinamento alfabetico anche nel pannello admin per comodità
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
                 st.markdown("---")
                 dati_caricamento = {}
                 
-                for s in squadre:
+                for s in squadre_ordinate_admin:
                     st.markdown(f"<div class='schedina-box'><b>⚽ {s['nome_squadra']}</b>", unsafe_allow_html=True)
                     f_foto = st.file_uploader(f"Screenshot Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"foto_{s['id']}")
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -277,11 +279,12 @@ with st.sidebar:
         with tab4:
             st.write("### Inserisci o Modifica Punti")
             if squadre:
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 with st.form("add_p_multi"):
                     g_pts = st.selectbox("Giornata Punti", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                     num_g_pts = int(g_pts.split()[1])
                     
-                    punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre}
+                    punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre_ordinate_admin}
                     
                     col_form1, col_form2 = st.columns(2)
                     salva_punti = col_form1.form_submit_button("Aggiorna Punti")
@@ -310,7 +313,7 @@ with st.sidebar:
             num_g_del = int(g_del.split()[1])
             try:
                 schedine_g = supabase.table("schedine").select("squadra_id").eq("giornata", num_g_del).execute().data or []
-                squadre_con_schedina = [s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]]
+                squadre_con_schedina = sorted([s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]], key=lambda x: x['nome_squadra'])
             except Exception:
                 squadre_con_schedina = []
             
@@ -327,7 +330,8 @@ with st.sidebar:
                 
             st.markdown("---")
             if squadre:
-                sq_del = st.selectbox("Elimina Squadra Definitivamente", [s['nome_squadra'] for s in squadre], key="sq_del_tot")
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
+                sq_del = st.selectbox("Elimina Squadra Definitivamente", [s['nome_squadra'] for s in squadre_ordinate_admin], key="sq_del_tot")
                 if st.button("Rimuovi Squadra e Dati"):
                     s_id = next(s['id'] for s in squadre if s['nome_squadra'] == sq_del)
                     supabase.table("squadre").delete().eq("id", s_id).execute()
@@ -453,6 +457,7 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
+            # Ordinamento alfabetico forzato per la visualizzazione delle schedine (ottimizzato anche per mobile)
             squadre_ordinate = sorted(squadre, key=lambda x: x['nome_squadra'])
             
             cols = st.columns(3)
