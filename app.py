@@ -6,92 +6,94 @@ import time
 import os
 from openai import OpenAI
 
-# Prova a importare la logica del bot se presente, altrimenti la definisce direttamente
-try:
-    from bot_logica import calcola_risultati_da_foto_o_dati
-except ImportError:
-    def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
-        try:
-            schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
-            if not schedine:
-                return False, f"Nessuna schedina trovata per la Giornata {giornata}."
+# ---------------------------------------------------------
+# LOGICA DEL BOT INTEGRATA (GPT-4o-mini per analisi schedine)
+# ---------------------------------------------------------
+def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
+    try:
+        schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
+        if not schedine:
+            return False, f"Nessuna schedina trovata per la Giornata {giornata}."
+        
+        risultati_reali = ['1', 'X', '2', '1']
+        
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            try:
+                api_key = st.secrets.get("OPENAI_API_KEY")
+            except:
+                pass
+                
+        if not api_key:
+            return False, "Chiave OpenAI non trovata nei secrets o nelle variabili d'ambiente."
             
-            risultati_reali = ['1', 'X', '2', '1']
+        client = OpenAI(api_key=api_key)
+        
+        report = []
+        for s in schedine:
+            schedina_url = s.get('schedina_url')
+            if not schedina_url:
+                continue
             
-            api_key = os.environ.get("OPENAI_API_KEY")
-            if not api_key:
-                try:
-                    api_key = st.secrets.get("OPENAI_API_KEY")
-                except:
-                    pass
-                    
-            if not api_key:
-                return False, "Chiave OpenAI non trovata nei secrets o nelle variabili d'ambiente."
+            try:
+                prompt_testo = "Analizza questa schedina. Leggi tutti gli eventi presenti. Estrai i pronostici (1, X, 2). Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. Nient'altro."
                 
-            client = OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt_testo
+                        }
+                    ],
+                    max_tokens=200
+                )
+                
+                risposta_ai = response.choices[0].message.content.strip()
+                risposta_ai = risposta_ai.replace("```python", "").replace("```", "").strip()
+                
+                pronostici_letti = eval(risposta_ai)
+                if not isinstance(pronostici_letti, list):
+                    pronostici_letti = []
+            except Exception as ex:
+                report.append(f"Squadra ID {s['squadra_id']}: Errore lettura ({str(ex)})")
+                continue
             
-            report = []
-            for s in schedine:
-                schedina_url = s.get('schedina_url')
-                if not schedina_url:
-                    continue
-                
-                try:
-                    prompt_testo = "Analizza questa schedina. Leggi tutti gli eventi presenti. Estrai i pronostici (1, X, 2). Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. Nient'altro."
-                    
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": prompt_testo
-                            }
-                        ],
-                        max_tokens=200
-                    )
-                    
-                    risposta_ai = response.choices[0].message.content.strip()
-                    risposta_ai = risposta_ai.replace("```python", "").replace("```", "").strip()
-                    
-                    pronostici_letti = eval(risposta_ai)
-                    if not isinstance(pronostici_letti, list):
-                        pronostici_letti = []
-                except Exception as ex:
-                    report.append(f"Squadra ID {s['squadra_id']}: Errore lettura ({str(ex)})")
-                    continue
-                
-                punti_ottenuti = 0
-                totale_eventi_letti = len(pronostici_letti)
-                
-                for i in range(min(len(pronostici_letti), len(risultati_reali))):
-                    if str(pronostici_letti[i]).strip().upper() == str(risultati_reali[i]).strip().upper():
-                        punti_ottenuti += 1
-                
-                supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
-                
-                supabase_client.table("risultati").insert({
-                    "squadra_id": s['squadra_id'], 
-                    "giornata": giornata, 
-                    "punteggio": punti_ottenuti
-                }).execute()
-                
-                report.append(f"Squadra ID {s['squadra_id']}: {punti_ottenuti}/{totale_eventi_letti} punti (Letti: {pronostici_letti})")
+            punti_ottenuti = 0
+            totale_eventi_letti = len(pronostici_letti)
             
-            return True, "\n".join(report)
+            for i in range(min(len(pronostici_letti), len(risultati_reali))):
+                if str(pronostici_letti[i]).strip().upper() == str(risultati_reali[i]).strip().upper():
+                    punti_ottenuti += 1
             
-        except Exception as e:
-            return False, f"Errore generale nel bot: {str(e)}"
+            supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
+            
+            supabase_client.table("risultati").insert({
+                "squadra_id": s['squadra_id'], 
+                "giornata": giornata, 
+                "punteggio": punti_ottenuti
+            }).execute()
+            
+            report.append(f"Squadra ID {s['squadra_id']}: {punti_ottenuti}/{totale_eventi_letti} punti (Letti: {pronostici_letti})")
+        
+        return True, "\n".join(report)
+        
+    except Exception as e:
+        return False, f"Errore generale nel bot: {str(e)}"
 
-# 1. Configurazione Supabase
+# ---------------------------------------------------------
+# CONFIGURAZIONE SUPABASE E PAGINA
+# ---------------------------------------------------------
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "fantabet"
 
-# 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A Pro", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS di Livello Superiore (Dark Mode & UI Moderna)
+# ---------------------------------------------------------
+# STILE CSS AVANZATO (DARK MODE & UI PERSONALIZZATA)
+# ---------------------------------------------------------
 st.markdown("""
     <style>
     :root {
@@ -118,7 +120,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Helper: Giornata corrente
+# Helper: Calcolo Giornata Corrente
 def get_giornata_corrente():
     oggi = datetime.now().date()
     inizio = datetime(2026, 8, 23).date()
@@ -126,11 +128,11 @@ def get_giornata_corrente():
 
 giornata_idx = get_giornata_corrente() - 1
 
-# Stato sessione
+# Gestione Stato di Sessione
 if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
 if "admin" not in st.session_state: st.session_state.admin = False
 
-# Funzioni di caricamento dati con caching ottimizzato
+# Caricamento dati DB ottimizzato con cache
 @st.cache_data(ttl=30)
 def carica_dati_db():
     try:
@@ -150,7 +152,9 @@ except:
 
 lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
 
-# --- AREA ADMIN ---
+# ---------------------------------------------------------
+# BARRA LATERALE (AREA AMMINISTRATORE PRO)
+# ---------------------------------------------------------
 with st.sidebar:
     st.subheader("⚙️ Area Amministratore Pro")
     if not st.session_state.admin:
@@ -333,7 +337,9 @@ with st.sidebar:
                     time.sleep(1.0)
                     st.rerun()
 
-# --- INTERFACCIA PRINCIPALE ---
+# ---------------------------------------------------------
+# INTERFACCIA PRINCIPALE E NAVIGAZIONE
+# ---------------------------------------------------------
 st.title("⚽ FantaBet Serie A Pro")
 
 g_corrente = get_giornata_corrente()
