@@ -16,15 +16,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Nessun fallback in chiaro: se manca il secret, l'accesso admin resta disabilitato
-# finché non viene configurato correttamente.
 ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
-
-# Nome del modello Gemini configurabile via secrets, con un default.
-# NB: verifica su https://ai.google.dev/gemini-api/docs/models il nome esatto
-# del modello disponibile per il tuo account/API key prima del deploy:
-# 'gemini-3.6-flash' non è un nome di modello che risulta pubblicato al momento
-# in cui questo codice è stato scritto.
 GEMINI_MODEL = st.secrets.get("GEMINI_MODEL", "gemini-2.0-flash")
 FOOTBALL_DATA_API_KEY = st.secrets.get("FOOTBALL_DATA_API_KEY")
 
@@ -154,12 +146,10 @@ lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate el
 
 
 def squadre_ordinate():
-    """Ritorna la lista squadre già ordinata, per evitare di riordinare in ogni tab."""
     return sorted(squadre, key=lambda x: x['nome_squadra'])
 
 
 def valida_immagine(file, max_mb=MAX_UPLOAD_MB):
-    """Controlla dimensione e tipo di un file caricato prima di inviarlo allo storage."""
     if file is None:
         return True, ""
     if file.size > max_mb * 1024 * 1024:
@@ -170,7 +160,6 @@ def valida_immagine(file, max_mb=MAX_UPLOAD_MB):
 
 
 def carica_su_storage(file, cartella, nome_file):
-    """Carica un file validato su Supabase Storage e ritorna l'URL pubblico, o None in caso di errore."""
     ok, msg = valida_immagine(file)
     if not ok:
         st.error(msg)
@@ -188,7 +177,6 @@ def carica_su_storage(file, cartella, nome_file):
 
 
 def elimina_da_storage(url):
-    """Rimuove un file dallo storage a partire dal suo URL pubblico, per evitare file orfani."""
     if not url:
         return
     try:
@@ -199,11 +187,10 @@ def elimina_da_storage(url):
         path = url[idx + len(marker):]
         supabase.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
-        st.warning(f"Impossibile rimuovere un file dallo storage ({e}). Potrebbe restare un file orfano nel bucket.")
+        st.warning(f"Impossibile rimuovere un file dallo storage ({e}).")
 
 
 def trascrivi_schedina_ia(giornata, supabase_client):
-    """Il bot si limita a leggere i pronostici dall'immagine per aiutarti nel controllo visivo."""
     try:
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
@@ -224,28 +211,22 @@ def trascrivi_schedina_ia(giornata, supabase_client):
                 import urllib.request
                 req = urllib.request.urlopen(schedina_url, timeout=15)
                 image_bytes = req.read()
-
                 image_parts = [{'mime_type': 'image/jpeg', 'data': image_bytes}]
-
                 prompt_testo = """Trascrivi chiaramente tutti i pronostici e le partite che vedi in questa schedina. Elenca le partite e i segni/risultati scelti in modo sintetico e leggibile."""
-
                 response = model.generate_content([image_parts[0], prompt_testo])
                 testo_risposta = response.text.strip()
-
                 report.append(f"📌 **{nome_squadra}**:\n{testo_risposta}\n" + "-" * 30)
-
             except Exception as ex:
                 report.append(f"📌 **{nome_squadra}** | Errore lettura immagine: {str(ex)}\n" + "-" * 30)
                 continue
 
         return True, "\n".join(report)
-
     except Exception as e:
         return False, f"Errore generale: {str(e)}"
 
 
 # =========================================================
-# ANALISI AUTOMATICA SCHEDINE E CALCOLO PUNTI (IA + API RISULTATI)
+# ANALISI AUTOMATICA SCHEDINE E CALCOLO PUNTI
 # =========================================================
 
 TIPI_VALIDI = {"fissa", "doppia", "gg_ng", "over_under"}
@@ -258,7 +239,6 @@ SEGNI_VALIDI = {
 
 
 def normalizza_nome_squadra(nome):
-    """Normalizza un nome squadra per il confronto (rimuove prefissi societari comuni, minuscolo)."""
     if not nome:
         return ""
     nome = nome.lower().strip()
@@ -270,7 +250,6 @@ def normalizza_nome_squadra(nome):
 
 
 def squadre_corrispondono(nome_a, nome_b):
-    """Confronto fuzzy tra due nomi squadra: normalizza ed esegue un controllo di sottostringa."""
     na, nb = normalizza_nome_squadra(nome_a), normalizza_nome_squadra(nome_b)
     if not na or not nb:
         return False
@@ -279,10 +258,8 @@ def squadre_corrispondono(nome_a, nome_b):
 
 @st.cache_data(ttl=3600)
 def recupera_risultati_giornata(giornata):
-    """Recupera i risultati finali della giornata di Serie A da football-data.org.
-    Ritorna (lista_risultati, errore)."""
     if not FOOTBALL_DATA_API_KEY:
-        return None, "Chiave FOOTBALL_DATA_API_KEY non configurata nei secrets. Registrati gratis su football-data.org."
+        return None, "Chiave FOOTBALL_DATA_API_KEY non configurata nei secrets."
     try:
         headers = {"X-Auth-Token": FOOTBALL_DATA_API_KEY}
         url = f"https://api.football-data.org/v4/competitions/SA/matches?matchday={giornata}"
@@ -318,7 +295,6 @@ def trova_match_reale(squadra_casa, squadra_trasferta, risultati_reali):
 
 
 def valuta_pronostico(pick, match):
-    """Ritorna True/False se il pronostico è corretto rispetto al risultato reale del match."""
     gol_casa, gol_trasferta = match["gol_casa"], match["gol_trasferta"]
     segno = "1" if gol_casa > gol_trasferta else "2" if gol_trasferta > gol_casa else "X"
     tipo, pronostico = pick.get("tipo"), pick.get("pronostico")
@@ -338,34 +314,18 @@ def valuta_pronostico(pick, match):
 
 
 def estrai_pronostici_schedina(schedina_url, model):
-    """Usa Gemini Vision per trascrivere in JSON strutturato i pronostici di una schedina.
-    Ritorna (lista_pronostici, errore)."""
     try:
         import urllib.request
         req = urllib.request.urlopen(schedina_url, timeout=15)
         image_bytes = req.read()
         image_part = {'mime_type': 'image/jpeg', 'data': image_bytes}
-
-        prompt = """Analizza l'immagine di questa schedina di pronostici sportivi e trascrivi OGNI pronostico presente, uno per elemento. Per ciascuno indica:
-- squadra_casa: nome della squadra di casa
-- squadra_trasferta: nome della squadra in trasferta
-- tipo: uno tra "fissa" (1X2 secco), "doppia" (doppia chance: 1X, 12, X2), "gg_ng" (Goal/No Goal), "over_under" (Over/Under 2.5 gol)
-- pronostico: il segno scelto, esattamente uno tra questi valori a seconda del tipo:
-  - fissa: "1", "X", "2"
-  - doppia: "1X", "12", "X2"
-  - gg_ng: "GG", "NG"
-  - over_under: "OVER", "UNDER"
-
-Rispondi SOLO con un array JSON valido, senza testo aggiuntivo, markdown o spiegazioni, nel formato:
+        prompt = """Analizza l'immagine di questa schedina e trascrivi OGNI pronostico presente in formato JSON valido:
 [{"squadra_casa": "...", "squadra_trasferta": "...", "tipo": "...", "pronostico": "..."}]"""
-
         response = model.generate_content(
             [image_part, prompt],
             generation_config=genai.types.GenerationConfig(response_mime_type="application/json"),
         )
-        testo = response.text.strip()
-        picks = json.loads(testo)
-
+        picks = json.loads(response.text.strip())
         picks_validi = []
         for p in picks:
             tipo = p.get("tipo")
@@ -373,15 +333,11 @@ Rispondi SOLO con un array JSON valido, senza testo aggiuntivo, markdown o spieg
             if tipo in TIPI_VALIDI and pronostico in SEGNI_VALIDI.get(tipo, set()) and p.get("squadra_casa") and p.get("squadra_trasferta"):
                 picks_validi.append(p)
         return picks_validi, None
-    except json.JSONDecodeError:
-        return None, "L'IA non ha restituito un JSON valido: riprova o controlla la qualità della foto."
     except Exception as e:
         return None, f"Errore lettura/analisi immagine: {e}"
 
 
 def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
-    """Analizza tutte le schedine di una giornata con l'IA e calcola i punti suggeriti
-    confrontandoli con i risultati reali. Ritorna (report, errore)."""
     risultati_reali, err = recupera_risultati_giornata(giornata)
     if err:
         return None, err
@@ -413,11 +369,9 @@ def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
             corretto = valuta_pronostico(p, match)
             if corretto:
                 punti += 1
-            dettaglio.append({**p, "esito": "✅" if corretto else "❌",
-                               "risultato_reale": f"{match['gol_casa']}-{match['gol_trasferta']}"})
+            dettaglio.append({**p, "esito": "✅" if corretto else "❌", "risultato_reale": f"{match['gol_casa']}-{match['gol_trasferta']}"})
 
-        report.append({"squadra_id": s['squadra_id'], "nome": nome_squadra, "errore": None,
-                        "punti_calcolati": punti, "dettaglio": dettaglio})
+        report.append({"squadra_id": s['squadra_id'], "nome": nome_squadra, "errore": None, "punti_calcolati": punti, "dettaglio": dettaglio})
 
     return report, None
 
@@ -430,7 +384,7 @@ with st.sidebar:
     st.subheader("⚙️ Area Amministratore Pro")
     if not st.session_state.admin:
         if not ADMIN_PASSWORD:
-            st.error("ADMIN_PASSWORD non configurata nei secrets. Impostala per abilitare l'accesso admin.")
+            st.error("ADMIN_PASSWORD non configurata nei secrets.")
         pwd = st.text_input("Password Admin", type="password", disabled=not ADMIN_PASSWORD)
         if st.button("Autenticati", disabled=not ADMIN_PASSWORD):
             if pwd == ADMIN_PASSWORD:
@@ -470,12 +424,11 @@ with st.sidebar:
 
         with tab2:
             st.write("### 🤖 Calcolo Punti Automatico con IA")
-            st.caption("L'IA legge ogni schedina, la confronta con i risultati reali della giornata (via football-data.org) e propone un punteggio. Controlla sempre il dettaglio prima di salvare: l'IA può sbagliare lettura o abbinamento partite.")
             g_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
 
             col_a1, col_a2 = st.columns(2)
-            if col_a1.button("🔍 Solo trascrivi schedine (testo libero)"):
+            if col_a1.button("🔍 Solo trascrivi schedine"):
                 with st.spinner("Estrazione pronostici in corso..."):
                     successo, messaggio = trascrivi_schedina_ia(num_g_auto, supabase)
                     if successo:
@@ -485,14 +438,14 @@ with st.sidebar:
                         st.error(messaggio)
 
             if col_a2.button("🧮 Analizza e Calcola Punti IA", type="primary"):
-                with st.spinner("Analisi schedine e confronto con i risultati reali in corso..."):
+                with st.spinner("Analisi schedine in corso..."):
                     report, err = analizza_e_calcola_punti(num_g_auto, supabase, squadre)
                     if err:
                         st.error(err)
                         st.session_state.pop("report_ia", None)
                     else:
                         st.session_state.report_ia = {"giornata": num_g_auto, "dati": report}
-                        st.success("Analisi completata! Controlla il dettaglio qui sotto prima di salvare.")
+                        st.success("Analisi completata!")
 
             report_sessione = st.session_state.get("report_ia")
             if report_sessione and report_sessione["giornata"] == num_g_auto:
@@ -504,15 +457,8 @@ with st.sidebar:
                             st.error(item["errore"])
                             continue
                         if item["dettaglio"]:
-                            df_dett = pd.DataFrame(item["dettaglio"])
-                            st.dataframe(df_dett, use_container_width=True)
-                        else:
-                            st.info("Nessun pronostico riconosciuto nella schedina.")
-                        punti_corretti = st.number_input(
-                            "Punti da salvare per questa squadra (modifica se necessario)",
-                            min_value=0, value=int(item["punti_calcolati"]), step=1,
-                            key=f"ia_pts_{item['squadra_id']}"
-                        )
+                            st.dataframe(pd.DataFrame(item["dettaglio"]), use_container_width=True)
+                        punti_corretti = st.number_input("Punti da salvare", min_value=0, value=int(item['punti_calcolati'] or 0), step=1, key=f"ia_pts_{item['squadra_id']}")
                         punti_da_salvare[item["squadra_id"]] = punti_corretti
 
                 if punti_da_salvare and st.button("💾 Conferma e Salva Punti in Classifica", type="primary"):
@@ -520,14 +466,14 @@ with st.sidebar:
                         supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_auto).execute()
                         supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_auto}).execute()
                     st.session_state.pop("report_ia", None)
-                    st.toast("Punti calcolati dall'IA salvati in classifica!", icon="✅")
+                    st.toast("Punti salvati!", icon="✅")
                     time.sleep(1.0)
                     st.rerun()
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
             if squadre:
-                g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
+                g_sch = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
                 st.markdown("---")
@@ -539,7 +485,7 @@ with st.sidebar:
                     dati_caricamento[s['id']] = f_foto
                 
                 if st.button("💾 Salva Tutte le Schedine Caricate", type="primary"):
-                    with st.spinner("Caricamento in corso su Supabase..."):
+                    with st.spinner("Caricamento in corso..."):
                         caricate = 0
                         for s_id, file_foto in dati_caricamento.items():
                             if file_foto is not None:
@@ -551,50 +497,51 @@ with st.sidebar:
                                         "squadra_id": s_id,
                                         "giornata": num_g_sch,
                                         "schedina_url": url_img,
-                                        "pronostici_json": {}
+                                        "pronostici_json": {},
+                                        "visibile": False
                                     }).execute()
                                     caricate += 1
                         
                         if caricate > 0:
-                            st.toast(f"Salvate con successo {caricate} schedine!", icon="🎉")
+                            st.toast(f"Salvate {caricate} schedine (Nascoste al pubblico)!", icon="🎉")
                             time.sleep(1.2)
                             st.rerun()
                         else:
-                            st.warning("Nessuna foto caricata correttamente.")
+                            st.warning("Nessuna foto caricata.")
+                
+                st.markdown("---")
+                if st.button(f"🔓 Rivela Schedine Giornata {num_g_sch} al Pubblico", type="primary"):
+                    supabase.table("schedine").update({"visibile": True}).eq("giornata", num_g_sch).execute()
+                    st.toast(f"Schedine della Giornata {num_g_sch} ora visibili a tutti!", icon="👁️")
+                    time.sleep(1.0)
+                    st.rerun()
             else:
                 st.info("Nessuna squadra disponibile.")
                 
         with tab4:
-            st.write("### ⚽ Gestione Punti Manuali (100% Sicuro)")
-            st.caption("Inserisci direttamente il punteggio esatto ottenuto da ogni squadra nella giornata selezionata.")
+            st.write("### ⚽ Gestione Punti Manuali")
             if squadre:
                 g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                 num_g_pts = int(g_pts.split()[1])
-                
                 existing_res = {r['squadra_id']: r['punteggio'] for r in supabase.table("risultati").select("squadra_id, punteggio").eq("giornata", num_g_pts).execute().data or []}
 
                 with st.form("add_p_multi"):
                     punti_inseriti = {}
                     for s in squadre_ordinate():
-                        valore_precedente = existing_res.get(s['id'], 0)
-                        punti_inseriti[s['id']] = st.number_input(f"Punti {s['nome_squadra']}", min_value=0, value=int(valore_precedente), step=1, key=f"pts_{s['id']}")
+                        punti_inseriti[s['id']] = st.number_input(f"Punti {s['nome_squadra']}", min_value=0, value=int(existing_res.get(s['id'], 0)), step=1, key=f"pts_{s['id']}")
                     
-                    col_form1, col_form2 = st.columns(2)
-                    salva_punti = col_form1.form_submit_button("💾 Salva Tutti i Punti", type="primary")
-                    azzera_giornata = col_form2.form_submit_button("🗑️ Azzera Giornata")
-                    
-                    if salva_punti:
+                    c_f1, c_f2 = st.columns(2)
+                    if c_f1.form_submit_button("💾 Salva Tutti i Punti", type="primary"):
                         for s_id, p in punti_inseriti.items():
                             supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
                             if p >= 0:
                                 supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_pts}).execute()
-                        st.toast("Punti aggiornati con successo nella classifica!", icon="✅")
+                        st.toast("Punti aggiornati!", icon="✅")
                         time.sleep(1.0)
                         st.rerun()
-                        
-                    if azzera_giornata:
+                    if c_f2.form_submit_button("🗑️ Azzera Giornata"):
                         supabase.table("risultati").delete().eq("giornata", num_g_pts).execute()
-                        st.toast(f"Punti della Giornata {num_g_pts} azzerati!", icon="⚠️")
+                        st.toast("Giornata azzerata!", icon="⚠️")
                         time.sleep(1.0)
                         st.rerun()
             else:
@@ -604,16 +551,8 @@ with st.sidebar:
             st.write("### Gestione ed Eliminazione")
             g_del = st.selectbox("Giornata", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
-            try:
-                schedine_g = supabase.table("schedine").select("*").eq("giornata", num_g_del).execute().data or []
-                squadre_con_schedina = sorted(
-                    [s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]],
-                    key=lambda x: x['nome_squadra']
-                )
-            except Exception as e:
-                schedine_g = []
-                squadre_con_schedina = []
-                st.error(f"Errore nel recupero delle schedine: {e}")
+            schedine_g = supabase.table("schedine").select("*").eq("giornata", num_g_del).execute().data or []
+            squadre_con_schedina = sorted([s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]], key=lambda x: x['nome_squadra'])
             
             if squadre_con_schedina:
                 sq_sch_del = st.selectbox("Squadra Schedina", [s['nome_squadra'] for s in squadre_con_schedina], key="sq_sch_del")
@@ -623,7 +562,7 @@ with st.sidebar:
                     supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
                     if schedina_da_rimuovere:
                         elimina_da_storage(schedina_da_rimuovere.get('schedina_url'))
-                    st.toast("Schedina rimossa correttamente.", icon="🗑️")
+                    st.toast("Schedina rimossa.", icon="🗑️")
                     time.sleep(1.0)
                     st.rerun()
             else:
@@ -636,17 +575,13 @@ with st.sidebar:
                     s_id = next(s['id'] for s in squadre if s['nome_squadra'] == sq_del)
                     squadra_obj = next(s for s in squadre if s['id'] == s_id)
                     schedine_squadra = supabase.table("schedine").select("schedina_url").eq("squadra_id", s_id).execute().data or []
-
                     supabase.table("squadre").delete().eq("id", s_id).execute()
                     supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
                     supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
-
-                    # Pulizia dei file nello storage per non lasciare file orfani nel bucket
                     elimina_da_storage(squadra_obj.get('logo_url'))
                     for sch in schedine_squadra:
                         elimina_da_storage(sch.get('schedina_url'))
-
-                    st.toast("Squadra e dati eliminati.", icon="⚠️")
+                    st.toast("Squadra eliminata.", icon="⚠️")
                     time.sleep(1.0)
                     st.rerun()
 
@@ -664,33 +599,23 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 c1, c2, c3, c4 = st.columns(4)
-if c1.button("🏆 Classifica", use_container_width=True): 
-    st.session_state.current_page = "Classifica"
-if c2.button("📅 Schedine", use_container_width=True): 
-    st.session_state.current_page = "Schedine"
-if c3.button("❄️ Coppa Inverno", use_container_width=True): 
-    st.session_state.current_page = "Coppa Inverno"
-if c4.button("🌸 Coppa Primavera", use_container_width=True): 
-    st.session_state.current_page = "Coppa Primavera"
+if c1.button("🏆 Classifica", use_container_width=True): st.session_state.current_page = "Classifica"
+if c2.button("📅 Schedine", use_container_width=True): st.session_state.current_page = "Schedine"
+if c3.button("❄️ Coppa Inverno", use_container_width=True): st.session_state.current_page = "Coppa Inverno"
+if c4.button("🌸 Coppa Primavera", use_container_width=True): st.session_state.current_page = "Coppa Primavera"
 
 st.markdown("---")
 
 def calcola_classifica(giornate_target=None):
-    if not squadre: 
-        return []
+    if not squadre: return []
     classifica_temp = []
     for s in squadre:
         res_squadra = [r for r in risultati if r['squadra_id'] == s['id']]
         if giornate_target:
             res_squadra = [r for r in res_squadra if r.get('giornata') is not None and giornate_target[0] <= int(r['giornata']) <= giornate_target[1]]
-        
         punti_totali = sum(int(r['punteggio']) for r in res_squadra)
         dettaglio_giornate = {int(r['giornata']): int(r['punteggio']) for r in res_squadra if r.get('giornata') is not None}
-        
-        classifica_temp.append({
-            'id': s['id'], 'nome': s['nome_squadra'], 'punti': punti_totali, 
-            'logo': s.get('logo_url'), 'dettaglio': dettaglio_giornate
-        })
+        classifica_temp.append({'id': s['id'], 'nome': s['nome_squadra'], 'punti': punti_totali, 'logo': s.get('logo_url'), 'dettaglio': dettaglio_giornate})
     return sorted(classifica_temp, key=lambda x: (-x['punti'], x['nome']))
 
 if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Primavera"]:
@@ -699,45 +624,15 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
     
     if squadre:
         classifica = calcola_classifica(target)
-        
         if st.session_state.admin and not is_coppa and classifica:
             df_export = pd.DataFrame([{'Squadra': item['nome'], 'Punti Totali': item['punti']} for item in classifica])
             st.download_button("📥 Esporta Classifica CSV", df_export.to_csv(index=False).encode('utf-8'), "classifica_fantabet.csv", "text/csv")
         
         giornate_registrate_set = {r.get('giornata') for r in risultati}
         
-        if not is_coppa and 38 in giornate_registrate_set and len(classifica) >= 3:
-            st.markdown("<div class='winner-card'><h2>🏆 PODIO FINALE CAMPIONATO 🏆</h2></div>", unsafe_allow_html=True)
-            col1, col2, col3 = st.columns(3)
-            for i, col in enumerate([col2, col1, col3]):
-                with col:
-                    logo_p = f"<img src='{html.escape(classifica[i]['logo'])}' style='width:65px; height:65px; border-radius:50%; object-fit:cover; margin-bottom:8px; border:2px solid #FFD700;' /><br>" if classifica[i]['logo'] else ""
-                    st.markdown(f"### {'🥇' if i==0 else '🥈' if i==1 else '🥉'} {html.escape(classifica[i]['nome'])}")
-                    if classifica[i]['logo']: 
-                        st.markdown(logo_p, unsafe_allow_html=True)
-                    st.write(f"**{classifica[i]['punti']} Punti**")
-        
-        if is_coppa:
-            fine_coppa = 17 if st.session_state.current_page == "Coppa Inverno" else 32
-            if fine_coppa in giornate_registrate_set and classifica and classifica[0]['punti'] > 0:
-                vincitore = classifica[0]
-                logo_v = f"<img src='{html.escape(vincitore['logo'])}' style='width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid #FFD700; margin-bottom:12px; box-shadow: 0 0 15px rgba(255,215,0,0.5);' />" if vincitore['logo'] else "🏆"
-                st.markdown(f"""<div class="winner-card">
-                        <h2 style="color:#FFD700; letter-spacing: 1px;">🏆 TRIONFO {html.escape(st.session_state.current_page.upper())} 🏆</h2>
-                        {logo_v}
-                        <h1 style="color:#FFF; margin-top:5px; font-size:2.2em;">🥇 {html.escape(vincitore['nome'])}</h1>
-                        <p style="color:#4CAF50; font-weight:bold; font-size:1.2em;">Campione con {vincitore['punti']} punti</p>
-                        </div>""", unsafe_allow_html=True)
-                st.balloons()
-
         for pos, item in enumerate(classifica, 1):
-            if is_coppa:
-                c_class = "gold" if pos == 1 else ""
-                badge_pos = "🥇" if pos == 1 else f"{pos}°"
-            else:
-                c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else ""
-                badge_pos = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"{pos}°"
-
+            c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else "" if not is_coppa else ("gold" if pos == 1 else "")
+            badge_pos = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"{pos}°" if not is_coppa else ("🥇" if pos == 1 else f"{pos}°")
             logo_html = f"<img src='{html.escape(item['logo'])}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
             
             st.markdown(f"""<div class="card {c_class}"><div style="display:flex; align-items:center;">
@@ -749,8 +644,7 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             if not is_coppa:
                 with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
-                        df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
-                        st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
+                        st.dataframe(pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).set_index('Giornata'), use_container_width=True)
                     else:
                         st.info("Nessun punteggio registrato.")
     else:
@@ -759,13 +653,20 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
 elif st.session_state.current_page == "Schedine":
     st.title("📅 Archivio Schedine")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
-    num_g = int(giornata_scelta.split(" ")[1])
+    num_g = int(giornata_scelta.split()[1])
     
     try:
-        schedine = supabase.table("schedine").select("*").eq("giornata", num_g).execute().data or []
+        # LOGICA DI VISIBILITÀ: Se non sei admin, mostra solo le schedine con visibile = True
+        query = supabase.table("schedine").select("*").eq("giornata", num_g)
+        if not st.session_state.get("admin", False):
+            query = query.eq("visibile", True)
+            
+        schedine = query.execute().data or []
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
-        if squadre:
+        if not schedine and not st.session_state.get("admin", False):
+            st.info("🤐 Le schedine per questa giornata non sono ancora state rivelate dall'amministratore!")
+        elif squadre:
             for s in squadre_ordinate():
                 logo_html = f"<img src='{html.escape(s.get('logo_url'))}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
                 st.markdown(f"<div class='grid-card'>{logo_html}<b style='font-size:1.1em;'>{html.escape(s['nome_squadra'])}</b>", unsafe_allow_html=True)
@@ -774,7 +675,7 @@ elif st.session_state.current_page == "Schedine":
                     st.image(url, use_container_width=True)
                     st.markdown(f"[🔍 Apri Schedina a Schermo Intero]({url})")
                 else: 
-                    st.caption("Nessuna schedina caricata.")
+                    st.caption("Nessuna schedina caricata o ancora nascosta.")
                 st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("Nessuna squadra registrata.")
