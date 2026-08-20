@@ -59,13 +59,28 @@ with st.sidebar:
                     
                     if st.form_submit_button("Salva Tutti i Punti"):
                         for s_id, p in punti_inseriti.items():
-                            if p > 0:
+                            # Rimuoviamo eventuali punti precedenti per quella giornata e squadra per evitare duplicati
+                            supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
+                            if p >= 0: # Salviamo anche lo zero se l'utente lo inserisce esplicitamente
                                 supabase.table("risultati").insert({
                                     "squadra_id": s_id, 
                                     "punteggio": p, 
                                     "giornata": num_g_pts
                                 }).execute()
                         st.success("Punti aggiornati con successo per tutte le squadre!")
+                        st.rerun()
+                
+                st.markdown("---")
+                st.write("### Azzera Punti Squadra")
+                with st.form("reset_p_single"):
+                    g_reset = st.selectbox("Giornata da azzerare", [f"Giornata {i}" for i in range(1, 39)], key="g_reset_pts")
+                    num_g_reset = int(g_reset.split()[1])
+                    sq_reset = st.selectbox("Squadra", [s['nome_squadra'] for s in sorted(squadre_list, key=lambda x: x['nome_squadra'])], key="sq_reset_pts")
+                    
+                    if st.form_submit_button("Azzera Punti Squadra"):
+                        s_id_reset = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_reset)
+                        supabase.table("risultati").delete().eq("squadra_id", s_id_reset).eq("giornata", num_g_reset).execute()
+                        st.success(f"Punti azzerati per {sq_reset} nella {g_reset}!")
                         st.rerun()
             else:
                 st.info("Aggiungi prima almeno una squadra.")
@@ -191,7 +206,6 @@ elif st.session_state.current_page == "Coppa Inverno":
         
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
-        # Controlliamo se sono stati inseriti risultati per la giornata 18 o successive (per decretare il vincitore ufficiale)
         giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
         torneo_concluso = any(g >= 18 for g in giornate_inserite)
         
@@ -234,7 +248,6 @@ elif st.session_state.current_page == "Coppa Primavera":
         
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
-        # Controlliamo se sono stati inseriti risultati per la giornata 33 o successive
         giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
         torneo_concluso = any(g >= 33 for g in giornate_inserite)
         
