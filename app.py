@@ -5,7 +5,7 @@ import pandas as pd
 import time
 import os
 import json
-from openai import OpenAI
+import google.generativeai as genai
 
 # =========================================================
 # CONFIGURAZIONE INIZIALE E CREDENZIALI (SICURA)
@@ -14,7 +14,10 @@ from openai import OpenAI
 # Legge chiavi e URL direttamente dai segreti protetti di Streamlit
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+
+# Configurazione di Google Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "fantabet"
@@ -97,7 +100,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E BOT IA
+# FUNZIONI DI SUPPORTO E BOT IA (GEMINI)
 # =========================================================
 
 def get_giornata_corrente():
@@ -138,7 +141,7 @@ def analizza_schedine_ia(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
             
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.5-flash')
         report = []
         dati_punti_esatti = {}
 
@@ -151,6 +154,15 @@ def analizza_schedine_ia(giornata, supabase_client):
             nome_squadra = sq_obj['nome_squadra'] if sq_obj else f"Squadra ID {s['squadra_id']}"
             
             try:
+                import urllib.request
+                req = urllib.request.urlopen(schedina_url)
+                image_bytes = req.read()
+                
+                image_parts = [{
+                    'mime_type': 'image/jpeg',
+                    'data': image_bytes
+                }]
+
                 prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A. 
                 Prendi in considerazione un massimo di 10 partite presenti nella schedina.
                 Valuta in autonomia i risultati reali di quelle partite e calcola i punti totali fatti da questa squadra.
@@ -159,22 +171,15 @@ def analizza_schedine_ia(giornata, supabase_client):
                     "punteggio_totale": 5
                 }}"""
                 
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt_testo},
-                                {"type": "image_url", "image_url": {"url": schedina_url}}
-                            ]
-                        }
-                    ],
-                    max_tokens=150,
-                    response_format={"type": "json_object"}
-                )
+                response = model.generate_content([image_parts[0], prompt_testo])
+                testo_risposta = response.text.strip()
                 
-                risposta_json = json.loads(response.choices[0].message.content.strip())
+                if testo_risposta.startswith("```json"):
+                    testo_risposta = testo_risposta[7:]
+                if testo_risposta.endswith("```"):
+                    testo_risposta = testo_risposta[:-3]
+                
+                risposta_json = json.loads(testo_risposta.strip())
                 punti = int(risposta_json.get("punteggio_totale", 0))
                 
                 dati_punti_esatti[s['squadra_id']] = punti
@@ -512,4 +517,3 @@ elif st.session_state.current_page == "Schedine":
             st.info("Nessuna squadra registrata.")
     except Exception as e:
         st.error(f"Errore nel recupero delle schedine: {e}")
-
