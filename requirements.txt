@@ -1,5 +1,4 @@
-google-genai
 streamlit
 supabase
 pandas
-pillow
+google-generativeai
