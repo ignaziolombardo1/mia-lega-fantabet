@@ -1,33 +1,41 @@
 import requests
-from supabase import create_client
 
-# Usa la tua chiave reale qui
+# Inserisci qui la tua chiave API (quella fornita in precedenza)
 API_KEY = "4dcfdf02c9f757fdaa4f514a4cbb7cf3"
 HEADERS = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "api-football-v1.p.rapidapi.com"}
 
 def calcola_risultati_giornata(giornata, supabase_client):
-    # 1. Recupera risultati reali dall'API
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    # Nota: L'ID 135 è la Serie A. Assicurati che la stagione sia quella corretta (es 2026)
     querystring = {"league": "135", "season": "2026", "round": f"Regular Season - {giornata}"}
     
     try:
         response = requests.get(url, headers=HEADERS, params=querystring).json()
         risultati_reali = {}
-        for match in response['response']:
+        
+        for match in response.get('response', []):
             home = match['teams']['home']['name']
             away = match['teams']['away']['name']
             h_score = match['goals']['home']
             a_score = match['goals']['away']
             
-            # Segno 1X2
+            if h_score is None or a_score is None:
+                continue
+                
+            # Calcolo del segno 1X2
             if h_score > a_score: segno = "1"
             elif a_score > h_score: segno = "2"
             else: segno = "X"
+            
             risultati_reali[f"{home} - {away}"] = segno
         
-        # 2. Confronta con le schedine nel DB
+        if not risultati_reali:
+            return False, "Nessun risultato ufficiale trovato per questa giornata (le partite potrebbero non essere ancora iniziate)."
+        
+        # Recupera le schedine degli utenti dal database
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
+        
+        if not schedine:
+            return False, "Nessuna schedina trovata per questa giornata nel database."
         
         for sch in schedine:
             punti = 0
@@ -36,12 +44,13 @@ def calcola_risultati_giornata(giornata, supabase_client):
                 if risultati_reali.get(partita) == segno_utente:
                     punti += 1
             
-            # 3. Aggiorna la classifica
+            # Aggiorna la tabella dei risultati su Supabase
             supabase_client.table("risultati").upsert({
                 "squadra_id": sch['squadra_id'],
                 "punteggio": punti,
                 "giornata": giornata
-            }).execute()
-        return True, "Classifica aggiornata con successo!"
+            }, on_conflict="squadra_id,giornata").execute()
+            
+        return True, "Classifica aggiornata con successo dal Bot!"
     except Exception as e:
-        return False, str(e)
+        return False, f"Errore di connessione o elaborazione: {str(e)}"
