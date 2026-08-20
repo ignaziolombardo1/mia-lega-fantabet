@@ -3,7 +3,8 @@ from supabase import create_client
 from datetime import datetime
 import pandas as pd
 import time
-import html
+import os
+import json
 import google.generativeai as genai
 
 # =========================================================
@@ -14,22 +15,11 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# Nessun fallback in chiaro: se manca il secret, l'accesso admin resta disabilitato
-# finché non viene configurato correttamente.
-ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD")
-
-# Nome del modello Gemini configurabile via secrets, con un default.
-# NB: verifica su https://ai.google.dev/gemini-api/docs/models il nome esatto
-# del modello disponibile per il tuo account/API key prima del deploy:
-# 'gemini-3.6-flash' non è un nome di modello che risulta pubblicato al momento
-# in cui questo codice è stato scritto.
-GEMINI_MODEL = st.secrets.get("GEMINI_MODEL", "gemini-2.0-flash")
-
+# Configurazione di Google Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "fantabet"
-MAX_UPLOAD_MB = 5
 
 st.set_page_config(page_title="FantaBet Serie A Pro", page_icon="⚽", layout="wide")
 
@@ -109,7 +99,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO
+# FUNZIONI DI SUPPORTO E TRASCRIZIONE IA (GEMINI 3.6 FLASH)
 # =========================================================
 
 def get_giornata_corrente():
@@ -127,77 +117,22 @@ if "admin" not in st.session_state:
 
 @st.cache_data(ttl=30)
 def carica_dati_db():
-    sq = sorted(supabase.table("squadre").select("*").execute().data or [], key=lambda x: x['nome_squadra'])
-    res = supabase.table("risultati").select("*").execute().data or []
-    return sq, res
+    try:
+        sq = sorted(supabase.table("squadre").select("*").execute().data or [], key=lambda x: x['nome_squadra'])
+        res = supabase.table("risultati").select("*").execute().data or []
+        return sq, res
+    except Exception as e:
+        return [], []
 
-try:
-    squadre, risultati = carica_dati_db()
-    errore_caricamento = False
-except Exception as e:
-    squadre, risultati = [], []
-    errore_caricamento = True
-    st.error(f"Errore nel caricamento dei dati da Supabase: {e}")
+squadre, risultati = carica_dati_db()
 
 try:
     risultati_globali = supabase.table("risultati").select("giornata").execute().data or []
     giornate_completate = set(r['giornata'] for r in risultati_globali if r.get('giornata'))
-except Exception as e:
+except Exception:
     giornate_completate = set()
-    if not errore_caricamento:
-        st.warning(f"Impossibile determinare le giornate completate: {e}")
 
 lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
-
-
-def squadre_ordinate():
-    """Ritorna la lista squadre già ordinata, per evitare di riordinare in ogni tab."""
-    return sorted(squadre, key=lambda x: x['nome_squadra'])
-
-
-def valida_immagine(file, max_mb=MAX_UPLOAD_MB):
-    """Controlla dimensione e tipo di un file caricato prima di inviarlo allo storage."""
-    if file is None:
-        return True, ""
-    if file.size > max_mb * 1024 * 1024:
-        return False, f"'{file.name}' supera i {max_mb}MB consentiti."
-    if not file.type or not file.type.startswith("image/"):
-        return False, f"'{file.name}' non è un'immagine valida."
-    return True, ""
-
-
-def carica_su_storage(file, cartella, nome_file):
-    """Carica un file validato su Supabase Storage e ritorna l'URL pubblico, o None in caso di errore."""
-    ok, msg = valida_immagine(file)
-    if not ok:
-        st.error(msg)
-        return None
-    try:
-        file_path = f"{cartella}/{nome_file}"
-        supabase.storage.from_(BUCKET_NAME).upload(
-            path=file_path, file=file.getvalue(),
-            file_options={"content-type": file.type, "upsert": "true"}
-        )
-        return supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
-    except Exception as e:
-        st.error(f"Errore caricamento file su storage: {e}")
-        return None
-
-
-def elimina_da_storage(url):
-    """Rimuove un file dallo storage a partire dal suo URL pubblico, per evitare file orfani."""
-    if not url:
-        return
-    try:
-        marker = f"/{BUCKET_NAME}/"
-        idx = url.find(marker)
-        if idx == -1:
-            return
-        path = url[idx + len(marker):]
-        supabase.storage.from_(BUCKET_NAME).remove([path])
-    except Exception as e:
-        st.warning(f"Impossibile rimuovere un file dallo storage ({e}). Potrebbe restare un file orfano nel bucket.")
-
 
 def trascrivi_schedina_ia(giornata, supabase_client):
     """Il bot si limita a leggere i pronostici dall'immagine per aiutarti nel controllo visivo."""
@@ -205,58 +140,56 @@ def trascrivi_schedina_ia(giornata, supabase_client):
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto."
-
-        model = genai.GenerativeModel(GEMINI_MODEL)
+            
+        model = genai.GenerativeModel('gemini-3.6-flash')
         report = []
 
         for s in schedine:
             schedina_url = s.get('schedina_url')
             if not schedina_url:
                 continue
-
+            
             sq_obj = next((sq for sq in squadre if sq['id'] == s['squadra_id']), None)
             nome_squadra = sq_obj['nome_squadra'] if sq_obj else f"Squadra ID {s['squadra_id']}"
-
+            
             try:
                 import urllib.request
-                req = urllib.request.urlopen(schedina_url, timeout=15)
+                req = urllib.request.urlopen(schedina_url)
                 image_bytes = req.read()
-
+                
                 image_parts = [{'mime_type': 'image/jpeg', 'data': image_bytes}]
 
                 prompt_testo = """Trascrivi chiaramente tutti i pronostici e le partite che vedi in questa schedina. Elenca le partite e i segni/risultati scelti in modo sintetico e leggibile."""
-
+                
                 response = model.generate_content([image_parts[0], prompt_testo])
                 testo_risposta = response.text.strip()
-
-                report.append(f"📌 **{nome_squadra}**:\n{testo_risposta}\n" + "-" * 30)
-
+                
+                report.append(f"📌 **{nome_squadra}**:\n{testo_risposta}\n" + "-"*30)
+                
             except Exception as ex:
-                report.append(f"📌 **{nome_squadra}** | Errore lettura immagine: {str(ex)}\n" + "-" * 30)
+                report.append(f"📌 **{nome_squadra}** | Errore lettura immagine: {str(ex)}\n" + "-"*30)
                 continue
-
+        
         return True, "\n".join(report)
-
+        
     except Exception as e:
         return False, f"Errore generale: {str(e)}"
 
 # =========================================================
-# BARRA LATERALE ADMIN
+# BARRA LATERALE ADMIN POTENZIATA
 # =========================================================
 
 with st.sidebar:
     st.subheader("⚙️ Area Amministratore Pro")
     if not st.session_state.admin:
-        if not ADMIN_PASSWORD:
-            st.error("ADMIN_PASSWORD non configurata nei secrets. Impostala per abilitare l'accesso admin.")
-        pwd = st.text_input("Password Admin", type="password", disabled=not ADMIN_PASSWORD)
-        if st.button("Autenticati", disabled=not ADMIN_PASSWORD):
-            if pwd == ADMIN_PASSWORD:
+        pwd = st.text_input("Password Admin", type="password")
+        if st.button("Autenticati"):
+            if pwd == st.secrets.get("ADMIN_PASSWORD", "admin123"): 
                 st.session_state.admin = True
                 st.toast("Accesso effettuato con successo!", icon="🔓")
                 time.sleep(0.6)
                 st.rerun()
-            else:
+            else: 
                 st.error("Password errata")
     else:
         st.success("Sessione Admin Attiva")
@@ -275,10 +208,16 @@ with st.sidebar:
                     if n:
                         logo_url = ""
                         if logo_file is not None:
-                            nome_file = f"{datetime.now().timestamp()}_{logo_file.name}"
-                            risultato_url = carica_su_storage(logo_file, "loghi", nome_file)
-                            logo_url = risultato_url or ""
-
+                            try:
+                                file_path = f"loghi/{datetime.now().timestamp()}_{logo_file.name}"
+                                supabase.storage.from_(BUCKET_NAME).upload(
+                                    path=file_path, file=logo_file.getvalue(),
+                                    file_options={"content-type": logo_file.type, "upsert": "true"}
+                                )
+                                logo_url = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                            except Exception as e:
+                                st.error(f"Errore caricamento logo: {e}")
+                        
                         supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo_url}).execute()
                         st.toast("Squadra registrata correttamente!", icon="⚽")
                         time.sleep(1.0)
@@ -304,13 +243,14 @@ with st.sidebar:
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
             if squadre:
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
                 st.markdown("---")
                 dati_caricamento = {}
-                for s in squadre_ordinate():
-                    st.markdown(f"<div class='schedina-box'><b>⚽ {html.escape(s['nome_squadra'])}</b>", unsafe_allow_html=True)
+                for s in squadre_ordinate_admin:
+                    st.markdown(f"<div class='schedina-box'><b>⚽ {s['nome_squadra']}</b>", unsafe_allow_html=True)
                     f_foto = st.file_uploader(f"Screenshot Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"foto_{s['id']}")
                     st.markdown("</div>", unsafe_allow_html=True)
                     dati_caricamento[s['id']] = f_foto
@@ -320,9 +260,14 @@ with st.sidebar:
                         caricate = 0
                         for s_id, file_foto in dati_caricamento.items():
                             if file_foto is not None:
-                                nome_file = f"g{num_g_sch}_{s_id}_{datetime.now().timestamp()}.png"
-                                url_img = carica_su_storage(file_foto, "schedine", nome_file)
-                                if url_img:
+                                try:
+                                    file_path = f"schedine/g{num_g_sch}_{s_id}_{datetime.now().timestamp()}.png"
+                                    supabase.storage.from_(BUCKET_NAME).upload(
+                                        path=file_path, file=file_foto.getvalue(),
+                                        file_options={"content-type": file_foto.type, "upsert": "true"}
+                                    )
+                                    url_img = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                                    
                                     supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
                                     supabase.table("schedine").insert({
                                         "squadra_id": s_id,
@@ -331,13 +276,15 @@ with st.sidebar:
                                         "pronostici_json": {}
                                     }).execute()
                                     caricate += 1
+                                except Exception as e:
+                                    st.error(f"Errore per la squadra ID {s_id}: {e}")
                         
                         if caricate > 0:
                             st.toast(f"Salvate con successo {caricate} schedine!", icon="🎉")
                             time.sleep(1.2)
                             st.rerun()
                         else:
-                            st.warning("Nessuna foto caricata correttamente.")
+                            st.warning("Nessuna foto caricata.")
             else:
                 st.info("Nessuna squadra disponibile.")
                 
@@ -345,6 +292,9 @@ with st.sidebar:
             st.write("### ⚽ Gestione Punti Manuali (100% Sicuro)")
             st.caption("Inserisci direttamente il punteggio esatto ottenuto da ogni squadra nella giornata selezionata.")
             if squadre:
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
+                
+                # Recupera i punti già inseriti per la giornata corrente per mostrarli come default nei campi se presenti
                 g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                 num_g_pts = int(g_pts.split()[1])
                 
@@ -352,7 +302,7 @@ with st.sidebar:
 
                 with st.form("add_p_multi"):
                     punti_inseriti = {}
-                    for s in squadre_ordinate():
+                    for s in squadre_ordinate_admin:
                         valore_precedente = existing_res.get(s['id'], 0)
                         punti_inseriti[s['id']] = st.number_input(f"Punti {s['nome_squadra']}", min_value=0, value=int(valore_precedente), step=1, key=f"pts_{s['id']}")
                     
@@ -382,24 +332,16 @@ with st.sidebar:
             g_del = st.selectbox("Giornata", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
             try:
-                schedine_g = supabase.table("schedine").select("*").eq("giornata", num_g_del).execute().data or []
-                squadre_con_schedina = sorted(
-                    [s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]],
-                    key=lambda x: x['nome_squadra']
-                )
-            except Exception as e:
-                schedine_g = []
+                schedine_g = supabase.table("schedine").select("squadra_id").eq("giornata", num_g_del).execute().data or []
+                squadre_con_schedina = sorted([s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]], key=lambda x: x['nome_squadra'])
+            except Exception:
                 squadre_con_schedina = []
-                st.error(f"Errore nel recupero delle schedine: {e}")
             
             if squadre_con_schedina:
                 sq_sch_del = st.selectbox("Squadra Schedina", [s['nome_squadra'] for s in squadre_con_schedina], key="sq_sch_del")
                 if st.button("Elimina Schedina"):
                     s_id_del = next(s['id'] for s in squadre_con_schedina if s['nome_squadra'] == sq_sch_del)
-                    schedina_da_rimuovere = next((sch for sch in schedine_g if sch['squadra_id'] == s_id_del), None)
                     supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
-                    if schedina_da_rimuovere:
-                        elimina_da_storage(schedina_da_rimuovere.get('schedina_url'))
                     st.toast("Schedina rimossa correttamente.", icon="🗑️")
                     time.sleep(1.0)
                     st.rerun()
@@ -408,21 +350,13 @@ with st.sidebar:
                 
             st.markdown("---")
             if squadre:
-                sq_del = st.selectbox("Elimina Squadra Definitivamente", [s['nome_squadra'] for s in squadre_ordinate()], key="sq_del_tot")
+                squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
+                sq_del = st.selectbox("Elimina Squadra Definitivamente", [s['nome_squadra'] for s in squadre_ordinate_admin], key="sq_del_tot")
                 if st.button("Rimuovi Squadra e Dati"):
                     s_id = next(s['id'] for s in squadre if s['nome_squadra'] == sq_del)
-                    squadra_obj = next(s for s in squadre if s['id'] == s_id)
-                    schedine_squadra = supabase.table("schedine").select("schedina_url").eq("squadra_id", s_id).execute().data or []
-
                     supabase.table("squadre").delete().eq("id", s_id).execute()
                     supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
                     supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
-
-                    # Pulizia dei file nello storage per non lasciare file orfani nel bucket
-                    elimina_da_storage(squadra_obj.get('logo_url'))
-                    for sch in schedine_squadra:
-                        elimina_da_storage(sch.get('schedina_url'))
-
                     st.toast("Squadra e dati eliminati.", icon="⚠️")
                     time.sleep(1.0)
                     st.rerun()
@@ -488,8 +422,8 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             col1, col2, col3 = st.columns(3)
             for i, col in enumerate([col2, col1, col3]):
                 with col:
-                    logo_p = f"<img src='{html.escape(classifica[i]['logo'])}' style='width:65px; height:65px; border-radius:50%; object-fit:cover; margin-bottom:8px; border:2px solid #FFD700;' /><br>" if classifica[i]['logo'] else ""
-                    st.markdown(f"### {'🥇' if i==0 else '🥈' if i==1 else '🥉'} {html.escape(classifica[i]['nome'])}")
+                    logo_p = f"<img src='{classifica[i]['logo']}' style='width:65px; height:65px; border-radius:50%; object-fit:cover; margin-bottom:8px; border:2px solid #FFD700;' /><br>" if classifica[i]['logo'] else ""
+                    st.markdown(f"### {'🥇' if i==0 else '🥈' if i==1 else '🥉'} {classifica[i]['nome']}")
                     if classifica[i]['logo']: 
                         st.markdown(logo_p, unsafe_allow_html=True)
                     st.write(f"**{classifica[i]['punti']} Punti**")
@@ -498,11 +432,11 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             fine_coppa = 17 if st.session_state.current_page == "Coppa Inverno" else 32
             if fine_coppa in giornate_registrate_set and classifica and classifica[0]['punti'] > 0:
                 vincitore = classifica[0]
-                logo_v = f"<img src='{html.escape(vincitore['logo'])}' style='width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid #FFD700; margin-bottom:12px; box-shadow: 0 0 15px rgba(255,215,0,0.5);' />" if vincitore['logo'] else "🏆"
+                logo_v = f"<img src='{vincitore['logo']}' style='width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid #FFD700; margin-bottom:12px; box-shadow: 0 0 15px rgba(255,215,0,0.5);' />" if vincitore['logo'] else "🏆"
                 st.markdown(f"""<div class="winner-card">
-                        <h2 style="color:#FFD700; letter-spacing: 1px;">🏆 TRIONFO {html.escape(st.session_state.current_page.upper())} 🏆</h2>
+                        <h2 style="color:#FFD700; letter-spacing: 1px;">🏆 TRIONFO {st.session_state.current_page.upper()} 🏆</h2>
                         {logo_v}
-                        <h1 style="color:#FFF; margin-top:5px; font-size:2.2em;">🥇 {html.escape(vincitore['nome'])}</h1>
+                        <h1 style="color:#FFF; margin-top:5px; font-size:2.2em;">🥇 {vincitore['nome']}</h1>
                         <p style="color:#4CAF50; font-weight:bold; font-size:1.2em;">Campione con {vincitore['punti']} punti</p>
                         </div>""", unsafe_allow_html=True)
                 st.balloons()
@@ -515,12 +449,12 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                 c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else ""
                 badge_pos = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"{pos}°"
 
-            logo_html = f"<img src='{html.escape(item['logo'])}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
+            logo_html = f"<img src='{item['logo']}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
             
             st.markdown(f"""<div class="card {c_class}"><div style="display:flex; align-items:center;">
                         <span style="font-weight:bold; width:38px; font-size:1.1em;">{badge_pos}</span>
                         {logo_html}
-                        <span style="flex-grow:1; margin-left:5px; font-weight:bold; font-size:1.1em;">{html.escape(item['nome'])}</span>
+                        <span style="flex-grow:1; margin-left:5px; font-weight:bold; font-size:1.1em;">{item['nome']}</span>
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
             if not is_coppa:
@@ -543,9 +477,10 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            for s in squadre_ordinate():
-                logo_html = f"<img src='{html.escape(s.get('logo_url'))}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
-                st.markdown(f"<div class='grid-card'>{logo_html}<b style='font-size:1.1em;'>{html.escape(s['nome_squadra'])}</b>", unsafe_allow_html=True)
+            squadre_ordinate = sorted(squadre, key=lambda x: x['nome_squadra'])
+            for s in squadre_ordinate:
+                logo_html = f"<img src='{s.get('logo_url')}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
+                st.markdown(f"<div class='grid-card'>{logo_html}<b style='font-size:1.1em;'>{s['nome_squadra']}</b>", unsafe_allow_html=True)
                 url = schedine_dict.get(s['id'])
                 if url: 
                     st.image(url, use_container_width=True)
