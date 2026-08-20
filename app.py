@@ -131,11 +131,17 @@ lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate el
 
 def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
     try:
+        # 1. Recupera i risultati reali dal database per quella giornata
+        ufficiali = supabase_client.table("risultati_reali").select("*").eq("giornata", giornata).order("ordine_partita").execute().data
+        if not ufficiali:
+            return False, f"Risultati reali non inseriti nel DB per la Giornata {giornata}. Inseriscili prima nel tab '⚽ Punti Ufficiali'."
+        
+        risultati_reali = [str(r['pronostico_vincente']).strip().upper() for r in ufficiali]
+
+        # 2. Recupera le schedine salvate per la giornata
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}."
-        
-        risultati_reali = ['1', 'X', '2', '1']
         
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -148,22 +154,28 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
             return False, "Chiave OpenAI non trovata nei secrets o nelle variabili d'ambiente."
             
         client = OpenAI(api_key=api_key)
-        
         report = []
+
         for s in schedine:
             schedina_url = s.get('schedina_url')
             if not schedina_url:
                 continue
             
             try:
-                prompt_testo = "Analizza questa schedina. Leggi tutti gli eventi presenti. Estrai i pronostici (1, X, 2). Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. Nient'altro."
+                prompt_testo = f"""Analizza questa immagine di una schedina. 
+                Estrai i pronostici esatti (1, X, 2) dei {len(risultati_reali)} match presenti.
+                Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. 
+                Nient'altro, nessun commento."""
                 
                 response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
                         {
                             "role": "user",
-                            "content": prompt_testo
+                            "content": [
+                                {"type": "text", "text": prompt_testo},
+                                {"type": "image_url", "image_url": {"url": schedina_url}}
+                            ]
                         }
                     ],
                     max_tokens=200
@@ -176,16 +188,18 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 if not isinstance(pronostici_letti, list):
                     pronostici_letti = []
             except Exception as ex:
-                report.append(f"Squadra ID {s['squadra_id']}: Errore lettura ({str(ex)})")
+                report.append(f"Squadra ID {s['squadra_id']}: Errore lettura IA ({str(ex)})")
                 continue
             
             punti_ottenuti = 0
             totale_eventi_letti = len(pronostici_letti)
             
+            # 3. Confronto puntuale: 1 punto per ogni esito corretto
             for i in range(min(len(pronostici_letti), len(risultati_reali))):
-                if str(pronostici_letti[i]).strip().upper() == str(risultati_reali[i]).strip().upper():
+                if str(pronostici_letti[i]).strip().upper() == str(risultati_reali[i]):
                     punti_ottenuti += 1
             
+            # 4. Aggiornamento nel database dei risultati
             supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
             
             supabase_client.table("risultati").insert({
@@ -223,7 +237,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Bot API", "🎫 Schedine", "⚽ Punti", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["➕ Squadra", "🤖 Bot API", "🎫 Schedine", "⚽ Ufficiali", "📊 Punti", "🗑️ Elimina"])
         
         with tab1:
             with st.form("add_s"):
@@ -253,26 +267,26 @@ with st.sidebar:
 
         with tab2:
             st.write("### Controllo Automatico Bot")
-            st.caption("Verifica i risultati reali tramite API e calcola i punteggi delle schedine salvate.")
+            st.caption("Il bot legge le schedine via IA confrontandole con i risultati ufficiali inseriti nel tab 'Ufficiali'.")
             g_auto = st.selectbox("Giornata da Verificare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
             
-            if st.button("Avvia Analisi e Mostra Report"):
-                with st.spinner("Elaborazione risultati in corso..."):
+            if st.button("Avvia Analisi IA e Calcola Punti"):
+                with st.spinner("Elaborazione immagini e confronto in corso..."):
                     successo, messaggio = calcola_risultati_da_foto_o_dati(num_g_auto, supabase)
                     if successo:
-                        st.success("Analisi completata!")
-                        st.text_area("Log di lettura del Bot:", value=messaggio, height=150)
+                        st.success("Analisi completata con successo!")
+                        st.text_area("Log di lettura del Bot:", value=messaggio, height=180)
                     else:
                         st.error(messaggio)
             
-            if st.checkbox("Mostra anteprima dati salvati nel DB"):
+            if st.checkbox("Mostra anteprima risultati salvati nel DB"):
                 dati_db = supabase.table("risultati").select("*").eq("giornata", num_g_auto).execute().data
                 if dati_db:
                     df_debug = pd.DataFrame(dati_db)
                     st.dataframe(df_debug, use_container_width=True)
                 else:
-                    st.warning("Nessun dato trovato nel database per questa giornata.")
+                    st.warning("Nessun punteggio registrato per questa giornata.")
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
@@ -326,7 +340,39 @@ with st.sidebar:
                 st.info("Nessuna squadra disponibile.")
                 
         with tab4:
-            st.write("### Inserisci o Modifica Punti")
+            st.write("### ⚽ Risultati Ufficiali della Giornata")
+            st.caption("Inserisci i segni vincenti reali (1, X, 2) necessari al bot per calcolare i punteggi.")
+            g_uff = st.selectbox("Giornata Ufficiali", lista_giornate_etichette, index=giornata_idx, key="g_uff_sel")
+            num_g_uff = int(g_uff.split()[1])
+            
+            num_match = st.number_input("Numero di partite in schedina", min_value=1, max_value=10, value=4, step=1, key="num_match_uff")
+            
+            # Recupera eventuali risultati già salvati
+            esistenti = supabase.table("risultati_reali").select("*").eq("giornata", num_g_uff).order("ordine_partita").execute().data or []
+            valori_salvati = {r['ordine_partita']: r['pronostico_vincente'] for r in esistenti}
+            
+            with st.form("form_risultati_reali"):
+                segni_inseriti = []
+                for i in range(num_match):
+                    val_precedente = valori_salvati.get(i+1, "1")
+                    idx_default = ["1", "X", "2"].index(val_precedente) if val_precedente in ["1", "X", "2"] else 0
+                    segno = st.selectbox(f"Partita {i+1} - Segno Vincente", ["1", "X", "2"], index=idx_default, key=f"match_res_{i+1}")
+                    segni_inseriti.append(segno)
+                
+                if st.form_submit_button("Salva Risultati Ufficiali"):
+                    supabase.table("risultati_reali").delete().eq("giornata", num_g_uff).execute()
+                    for idx, s_vincente in enumerate(segni_inseriti):
+                        supabase.table("risultati_reali").insert({
+                            "giornata": num_g_uff,
+                            "ordine_partita": idx + 1,
+                            "pronostico_vincente": s_vincente
+                        }).execute()
+                    st.toast("Risultati ufficiali salvati correttamente!", icon="⚽")
+                    time.sleep(1.0)
+                    st.rerun()
+
+        with tab5:
+            st.write("### Inserisci o Modifica Punti Manualmente")
             if squadre:
                 squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 with st.form("add_p_multi"):
@@ -356,7 +402,7 @@ with st.sidebar:
             else:
                 st.info("Inserisci prima le squadre.")
                 
-        with tab5:
+        with tab6:
             st.write("### Gestione ed Eliminazione")
             g_del = st.selectbox("Giornata", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
