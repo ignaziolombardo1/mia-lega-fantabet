@@ -99,7 +99,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E BOT IA (GEMINI AGGIORNATO)
+# FUNZIONI DI SUPPORTO E BOT IA (GEMINI 3.6 FLASH)
 # =========================================================
 
 def get_giornata_corrente():
@@ -140,7 +140,7 @@ def analizza_schedine_ia(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
             
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-3.6-flash')
         report = []
         dati_punti_esatti = {}
 
