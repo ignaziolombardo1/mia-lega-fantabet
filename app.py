@@ -41,7 +41,7 @@ st.markdown("""
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     
-    /* Stile per la schermata di caricamento iniziale (Splash Screen con dissolvenza CSS pura) */
+    /* Splash Screen con dissolvenza CSS pura e Logo Pulsante */
     .splash-screen {
         position: fixed;
         top: 0;
@@ -78,14 +78,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GESTIONE SICURA SPLASH SCREEN (SENZA LOOP DI RERUN)
+# GESTIONE SPLASH SCREEN CON LOGO PULSANTE
 # =========================================================
 
 if "splash_mostrato" not in st.session_state:
     st.session_state.splash_mostrato = True
     logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
     
-    # Mostriamo la schermata tramite HTML/CSS puro che svanisce da solo in 1.5 secondi
     st.markdown(f"""
         <div class="splash-screen">
             <img src="{logo_splash_url}" class="pulse-logo" />
@@ -487,7 +486,8 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="flex-grow:1; margin-left:5px; font-weight:bold; font-size:1.1em;">{item['nome']}</span>
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
-            if not ist_coppa if 'ist_coppa' in locals() else not is_coppa:
+            # Controllo corretto senza errori di sintassi
+            if not is_coppa:
                 with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
                         df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
@@ -522,4 +522,5 @@ elif st.session_state.current_page == "Schedine":
         else:
             st.info("Nessuna squadra registrata.")
     except Exception as e:
+    
         st.error(f"Errore nel recupero delle schedine: {e}")
