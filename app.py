@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime
 import pandas as pd
+import time
 
 # 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
@@ -58,6 +59,7 @@ with st.sidebar:
             if pwd == "capeta63": 
                 st.session_state.admin = True
                 st.success("Accesso riuscito!")
+                time.sleep(1)
                 st.rerun()
             else: 
                 st.error("Password errata")
@@ -96,6 +98,7 @@ with st.sidebar:
                         
                         supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo_url}).execute()
                         st.success("Squadra salvata con successo!")
+                        time.sleep(2)
                         st.rerun()
                     else:
                         st.warning("Inserisci il nome della squadra.")
@@ -121,6 +124,7 @@ with st.sidebar:
                                     "giornata": num_g_pts
                                 }).execute()
                         st.success("Punti aggiornati con successo!")
+                        time.sleep(2)
                         st.rerun()
                 
                 st.markdown("---")
@@ -134,6 +138,7 @@ with st.sidebar:
                         s_id_reset = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_reset)
                         supabase.table("risultati").delete().eq("squadra_id", s_id_reset).eq("giornata", num_g_reset).execute()
                         st.success(f"Punti azzerati per {sq_reset} nella Giornata {num_g_reset}!")
+                        time.sleep(2)
                         st.rerun()
             else:
                 st.info("Aggiungi prima almeno una squadra.")
@@ -150,6 +155,7 @@ with st.sidebar:
                         schedine_file_inserite[s['id']] = st.file_uploader(f"Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"sch_file_{s['id']}")
                     
                     if st.form_submit_button("Carica Schedine"):
+                        caricamenti_effettuati = 0
                         for s_id, file_obj in schedine_file_inserite.items():
                             if file_obj is not None:
                                 try:
@@ -167,10 +173,16 @@ with st.sidebar:
                                         "giornata": num_g_sch, 
                                         "schedina_url": url
                                     }).execute()
+                                    caricamenti_effettuati += 1
                                 except Exception as e:
                                     st.error(f"Errore caricamento schedina squadra ID {s_id}: {e}")
-                        st.success("Schedine caricate con successo!")
-                        st.rerun()
+                        
+                        if caricamenti_effettuati > 0:
+                            st.success(f"Caricate {caricamenti_effettuati} schedine con successo!")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.warning("Seleziona almeno un file prima di cliccare su Carica Schedine.")
             else:
                 st.info("Aggiungi prima almeno una squadra.")
                         
@@ -190,6 +202,7 @@ with st.sidebar:
                     s_id_del = next(s['id'] for s in squadre_con_schedina if s['nome_squadra'] == sq_sch_del)
                     supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
                     st.success("Schedina eliminata!")
+                    time.sleep(2)
                     st.rerun()
             else:
                 st.info("Nessuna schedina trovata in questa giornata.")
@@ -204,6 +217,7 @@ with st.sidebar:
                     supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
                     supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
                     st.success("Squadra eliminata!")
+                    time.sleep(2)
                     st.rerun()
             else:
                 st.info("Nessuna squadra presente.")
