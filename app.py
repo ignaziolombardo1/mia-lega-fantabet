@@ -200,7 +200,7 @@ with st.sidebar:
                 st.info("Nessuna squadra disponibile.")
                     
         with tab4:
-            st.write("### Inserisci Punti Manuali")
+            st.write("### Inserisci o Modifica Punti")
             if squadre:
                 with st.form("add_p_multi"):
                     g_pts = st.selectbox("Giornata Punti", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
@@ -208,12 +208,22 @@ with st.sidebar:
                     
                     punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre}
                     
-                    if st.form_submit_button("Aggiorna Punti"):
+                    col_form1, col_form2 = st.columns(2)
+                    salva_punti = col_form1.form_submit_button("Aggiorna Punti")
+                    azzera_giornata = col_form2.form_submit_button("🗑️ Azzera Giornata")
+                    
+                    if salva_punti:
                         for s_id, p in punti_inseriti.items():
                             supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
                             if p >= 0:
                                 supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_pts}).execute()
                         st.toast("Punti aggiornati con successo!", icon="✅")
+                        time.sleep(1.0)
+                        st.rerun()
+                        
+                    if azzera_giornata:
+                        supabase.table("risultati").delete().eq("giornata", num_g_pts).execute()
+                        st.toast(f"Punti della Giornata {num_g_pts} azzerati!", icon="⚠️")
                         time.sleep(1.0)
                         st.rerun()
             else:
