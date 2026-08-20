@@ -1,61 +1,26 @@
-import requests
-
-API_KEY = "4dcfdf02c9f757fdaa4f514a4cbb7cf3"
-HEADERS = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "api-football-v1.p.rapidapi.com"}
-
+# Sostituisci il contenuto di bot_logica.py con questo:
 def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
-    """
-    Interroga l'API di calcio per ottenere i risultati reali della giornata
-    e calcola i punteggi confrontandoli con i dati salvati delle schedine.
-    """
-    url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-    querystring = {"league": "135", "season": "2026", "round": f"Regular Season - {giornata}"}
-    
     try:
-        response = requests.get(url, headers=HEADERS, params=querystring).json()
-        risultati_reali = {}
-        
-        for match in response.get('response', []):
-            home = match['teams']['home']['name']
-            away = match['teams']['away']['name']
-            h_score = match['goals']['home']
-            a_score = match['goals']['away']
-            
-            if h_score is None or a_score is None:
-                continue
-                
-            if h_score > a_score: segno = "1"
-            elif a_score > h_score: segno = "2"
-            else: segno = "X"
-            
-            risultati_reali[f"{home} - {away}"] = segno
-        
-        if not risultati_reali:
-            return False, "Nessun risultato ufficiale trovato tramite API per questa giornata (le partite potrebbero non essere finite)."
-        
-        # Recupera le schedine degli utenti
+        # Recupera schedine dal DB
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
-        
         if not schedine:
             return False, "Nessuna schedina trovata per questa giornata."
         
-        for sch in schedine:
-            pronostici = sch.get('pronostici_json')
-            if not pronostici:
-                continue
-                
-            punti = 0
-            for partita, segno_utente in pronostici.items():
-                if risultati_reali.get(partita) == segno_utente:
-                    punti += 1
+        report = []
+        for s in schedine:
+            # --- QUI INSERISCI LA TUA LOGICA OCR/AI ---
+            # Esempio: punteggio = AI.leggi(s['schedina_url'])
+            punteggio_simulato = 75 # Sostituisci con il risultato reale della tua AI
             
-            # Salva il punteggio calcolato
+            # Salva nel DB
             supabase_client.table("risultati").upsert({
-                "squadra_id": sch['squadra_id'],
-                "punteggio": punti,
-                "giornata": giornata
-            }, on_conflict="squadra_id,giornata").execute()
+                "squadra_id": s['squadra_id'], 
+                "giornata": giornata, 
+                "punteggio": punteggio_simulato
+            }).execute()
             
-        return True, "Classifica calcolata e aggiornata con successo dal Bot!"
+            report.append(f"Squadra ID {s['squadra_id']}: Letto {punteggio_simulato} pts")
+        
+        return True, "\n".join(report)
     except Exception as e:
-        return False, f"Errore durante l'elaborazione: {str(e)}"
+        return False, f"Errore durante l'analisi: {str(e)}"
