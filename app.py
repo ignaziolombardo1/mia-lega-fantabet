@@ -454,5 +454,7 @@ elif st.session_state.current_page == "Schedine":
                     else: 
                         st.caption("Nessuna schedina caricata.")
                     st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Nessuna squadra registrata.")
     except Exception as e:
         st.error(f"Errore nel recupero delle schedine: {e}")
