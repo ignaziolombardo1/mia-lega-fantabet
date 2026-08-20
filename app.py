@@ -41,20 +41,6 @@ st.markdown("""
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     
-    /* Stile per la schermata di caricamento iniziale a tutto schermo */
-    .splash-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background-color: #0E1117;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 999999;
-    }
     .pulse-logo {
         width: 130px;
         height: 130px;
@@ -73,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE
+# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE (SICURA)
 # =========================================================
 
 if "app_loaded" not in st.session_state:
@@ -82,19 +68,22 @@ if "app_loaded" not in st.session_state:
 if not st.session_state.app_loaded:
     logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
     
-    placeholder_splash = st.empty()
-    placeholder_splash.markdown(f"""
-        <div class="splash-container">
-            <img src="{logo_splash_url}" class="pulse-logo" />
-            <h2 style="color: #FAFAFA; margin-top: 25px; font-family: sans-serif; letter-spacing: 1px;">FantaBet Serie A Pro</h2>
-            <p style="color: #888; font-size: 0.9em; margin-top: 5px;">Caricamento in corso...</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    time.sleep(1.5)
-    st.session_state.app_loaded = True
-    placeholder_splash.empty()
-    st.rerun()
+    # Usiamo uno spinner nativo con un contenitore pulito per evitare blocchi permanenti
+    with st.container():
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        col_A, col_B, col_C = st.columns([1, 2, 1])
+        with col_B:
+            st.markdown(f"""
+                <div style="text-align: center; padding: 40px;">
+                    <img src="{logo_splash_url}" class="pulse-logo" />
+                    <h2 style="color: #FAFAFA; margin-top: 25px; font-family: sans-serif; letter-spacing: 1px;">FantaBet Serie A Pro</h2>
+                    <p style="color: #888; font-size: 0.9em; margin-top: 5px;">Caricamento in corso...</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        time.sleep(1.0)
+        st.session_state.app_loaded = True
+        st.rerun()
 
 # =========================================================
 # FUNZIONI DI SUPPORTO E LOGICA DEL BOT
