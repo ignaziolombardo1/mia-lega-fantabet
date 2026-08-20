@@ -99,7 +99,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E BOT IA (GEMINI AGGIORNATO)
+# FUNZIONI DI SUPPORTO E BOT IA (GEMINI 1.5 PRO)
 # =========================================================
 
 def get_giornata_corrente():
@@ -140,7 +140,7 @@ def analizza_schedine_ia(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
             
-        model = genai.GenerativeModel('gemini-3.6-flash')
+        model = genai.GenerativeModel('gemini-1.5-pro')
         report = []
         dati_punti_esatti = {}
 
@@ -162,13 +162,17 @@ def analizza_schedine_ia(giornata, supabase_client):
                     'data': image_bytes
                 }]
 
-                prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A. 
-                Prendi in considerazione un massimo di 10 partite presenti nella schedina.
-                Valuta in autonomia i risultati reali di quelle partite e calcola i punti totali fatti da questa squadra.
-                Restituisci la risposta ESCLUSIVAMENTE in formato JSON con questa struttura esatta:
+                prompt_testo = f"""Analizza con massima precisione questa schedina della Giornata {giornata} di Serie A.
+                Il tuo compito è:
+                1. Leggere i nomi delle squadre e i relativi pronostici (1, X, 2 o altri esiti).
+                2. Confrontare i pronostici con i risultati reali della {giornata} giornata di Serie A.
+                3. Assegnare 1 punto per ogni pronostico indovinato.
+                4. Restituisci la risposta ESCLUSIVAMENTE in formato JSON, senza commenti extra:
                 {{
-                    "punteggio_totale": 5
-                }}"""
+                    "punteggio_totale": [numero_totale_punti]
+                }}
+                Se l'immagine non è leggibile, restituisci "punteggio_totale": 0.
+                """
                 
                 response = model.generate_content([image_parts[0], prompt_testo])
                 testo_risposta = response.text.strip()
