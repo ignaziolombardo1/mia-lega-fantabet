@@ -73,13 +73,13 @@ except Exception as e:
 # --- CLASSIFICA GENERALE ---
 if st.session_state.current_page == "Classifica":
     if squadre:
+        # Ordinamento: Prima per punti decrescenti (-x['punti']), a parità per nome alfabetico (x['nome'])
         classifica = sorted([{
             'nome': s['nome_squadra'], 
             'punti': sum(int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id']), 
             'logo': s.get('logo_url')
-        } for s in squadre], key=lambda x: -x['punti'])
+        } for s in squadre], key=lambda x: (-x['punti'], x['nome']))
         
-        # Podio Finale (controlliamo se ci sono dati per la 38esima o se la classifica è piena)
         giornate_registrate = {r.get('giornata') for r in risultati}
         if 38 in giornate_registrate and len(classifica) >= 3:
             st.markdown("<div class='winner-card'><h2>🏆 PODIO FINALE 🏆</h2></div>", unsafe_allow_html=True)
@@ -93,7 +93,6 @@ if st.session_state.current_page == "Classifica":
                         st.markdown(logo_p, unsafe_allow_html=True)
                     st.write(f"**{classifica[i]['punti']} Punti**")
         
-        # Lista Classifica
         for pos, item in enumerate(classifica, 1):
             c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else ""
             logo_html = f"<img src='{item['logo']}' style='width:30px; height:30px; border-radius:50%; object-fit:cover; margin-right:10px;' />" if item['logo'] else "⚽ "
@@ -115,7 +114,7 @@ elif "Coppa" in st.session_state.current_page:
             'nome': s['nome_squadra'], 
             'punti': sum(int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id'] and target[0] <= int(r['giornata']) <= target[1]), 
             'logo': s.get('logo_url')
-        } for s in squadre], key=lambda x: -x['punti'])
+        } for s in squadre], key=lambda x: (-x['punti'], x['nome']))
         
         giornate_registrate = {r.get('giornata') for r in risultati}
         torneo_concluso = target[1] in giornate_registrate
@@ -153,7 +152,7 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            for s in sorted(squadre, key=lambda x: x['nome_squadra']):
+            for s in sorted(schedine_dict.keys() if False else squadre, key=lambda x: x['nome_squadra']):
                 logo_html = f"<img src='{s.get('logo_url')}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
                 st.markdown(f"<div style='display:flex; align-items:center; margin-top:15px;'>{logo_html} <h3>{s['nome_squadra']}</h3></div>", unsafe_allow_html=True)
                 url = schedine_dict.get(s['id'])
