@@ -40,50 +40,8 @@ st.markdown("""
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-    
-    .pulse-logo {
-        width: 130px;
-        height: 130px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #4CAF50;
-        box-shadow: 0 0 25px rgba(76, 175, 80, 0.6);
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
-        70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(76, 175, 80, 0); }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
-    }
     </style>
 """, unsafe_allow_html=True)
-
-# =========================================================
-# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE (SICURA)
-# =========================================================
-
-if "app_loaded" not in st.session_state:
-    st.session_state.app_loaded = False
-
-if not st.session_state.app_loaded:
-    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
-    
-    # Usiamo uno spinner nativo con un contenitore pulito per evitare blocchi permanenti
-    with st.container():
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
-        col_A, col_B, col_C = st.columns([1, 2, 1])
-        with col_B:
-            st.markdown(f"""
-                <div style="text-align: center; padding: 40px;">
-                    <img src="{logo_splash_url}" class="pulse-logo" />
-                    <h2 style="color: #FAFAFA; margin-top: 25px; font-family: sans-serif; letter-spacing: 1px;">FantaBet Serie A Pro</h2>
-                    <p style="color: #888; font-size: 0.9em; margin-top: 5px;">Caricamento in corso...</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-        time.sleep(1.0)
-        st.session_state.app_loaded = True
-        st.rerun()
 
 # =========================================================
 # FUNZIONI DI SUPPORTO E LOGICA DEL BOT
