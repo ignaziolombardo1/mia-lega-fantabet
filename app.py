@@ -211,7 +211,6 @@ with st.sidebar:
 # --- MENU E LOGICA PAGINE ---
 st.title("⚽ FantaBet Serie A")
 
-# Promemoria Schedine Dinamico
 g_corrente = get_giornata_corrente()
 st.markdown(f"""
     <div class="alert-box">
@@ -227,7 +226,6 @@ if c4.button("🌸 Coppa Primavera", use_container_width=True): st.session_state
 
 st.markdown("---")
 
-# --- CARICAMENTO DATI SICURO ---
 try:
     squadre = supabase.table("squadre").select("*").execute().data
     risultati = supabase.table("risultati").select("*").execute().data
@@ -235,7 +233,6 @@ except Exception as e:
     squadre, risultati = [], []
     st.error(f"Errore di connessione al database: {e}")
 
-# Funzione d'appoggio per calcolare la classifica
 def calcola_classifica(giornate_target=None):
     if not squadre: return []
     
@@ -258,7 +255,6 @@ def calcola_classifica(giornate_target=None):
     
     return sorted(classifica_temp, key=lambda x: (-x['punti'], x['nome']))
 
-# --- CLASSIFICA GENERALE ---
 if st.session_state.current_page == "Classifica":
     if squadre:
         classifica = calcola_classifica()
@@ -306,7 +302,6 @@ if st.session_state.current_page == "Classifica":
     else:
         st.info("Nessuna squadra inserita nel database.")
 
-# --- COPPE (Inverno / Primavera) ---
 elif "Coppa" in st.session_state.current_page:
     is_inverno = st.session_state.current_page == "Coppa Inverno"
     target = (12, 17) if is_inverno else (27, 32)
@@ -339,7 +334,6 @@ elif "Coppa" in st.session_state.current_page:
     else:
         st.info("Nessuna squadra inserita nel database.")
 
-# --- PAGINA SCHEDINE ---
 elif st.session_state.current_page == "Schedine":
     st.title("📅 Schedine Giornaliere")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
