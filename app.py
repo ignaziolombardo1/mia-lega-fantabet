@@ -75,7 +75,7 @@ with st.sidebar:
     if not st.session_state.admin:
         pwd = st.text_input("Password", type="password")
         if st.button("Entra"):
-            if pwd == "capeta63": 
+            if pwd == st.secrets["ADMIN_PASSWORD"]: 
                 st.session_state.admin = True
                 st.success("Accesso riuscito!")
                 time.sleep(1)
