@@ -35,9 +35,18 @@ giornata_idx = get_giornata_corrente() - 1
 if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
 if "admin" not in st.session_state: st.session_state.admin = False
 
+# Caricamento dati globali utili per l'admin
+try:
+    risultati_globali = supabase.table("risultati").select("giornata").execute().data
+    giornate_completate = set(r['giornata'] for r in risultati_globali if r.get('giornata'))
+except:
+    giornate_completate = set()
+
+lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
+
 # --- AREA ADMIN ---
 with st.sidebar:
-    st.subheader("⚙️ Area Admin")
+    st.subheader("⚙️ Area Amministratore")
     if not st.session_state.admin:
         pwd = st.text_input("Password", type="password")
         if st.button("Entra"):
@@ -48,9 +57,93 @@ with st.sidebar:
             else: 
                 st.error("Password errata")
     else:
+        st.success("Accesso Effettuato")
         if st.button("Logout"): 
             st.session_state.admin = False
             st.rerun()
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina", "🗑️ Elimina"])
+        
+        try:
+            squadre_list = supabase.table("squadre").select("*").execute().data
+        except:
+            squadre_list = []
+        
+        with tab1:
+            with st.form("add_s"):
+                n = st.text_input("Nome Squadra")
+                logo = st.text_input("URL Logo")
+                if st.form_submit_button("Salva"): 
+                    if n:
+                        supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo}).execute()
+                        st.success("Squadra salvata!")
+                        st.rerun()
+                    else:
+                        st.warning("Inserisci il nome della squadra.")
+                    
+        with tab2:
+            st.write("### Inserisci Punti Giornata")
+            if squadre_list:
+                with st.form("add_p_multi"):
+                    g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
+                    num_g_pts = int(g_pts.split()[1])
+                    
+                    punti_inseriti = {}
+                    for s in sorted(squadre_list, key=lambda x: x['nome_squadra']):
+                        punti_inseriti[s['id']] = st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}")
+                    
+                    if st.form_submit_button("Salva Tutti i Punti"):
+                        for s_id, p in punti_inseriti.items():
+                            supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
+                            if p >= 0:
+                                supabase.table("risultati").insert({
+                                    "squadra_id": s_id, 
+                                    "punteggio": p, 
+                                    "giornata": num_g_pts
+                                }).execute()
+                        st.success("Punti aggiornati con successo!")
+                        st.rerun()
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+                
+        with tab3:
+            st.write("### Carica Schedine")
+            if squadre_list:
+                with st.form("add_sch_multi"):
+                    g = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_multi")
+                    num_g_sch = int(g.split()[1])
+                    
+                    schedine_inserite = {}
+                    for s in sorted(squadre_list, key=lambda x: x['nome_squadra']):
+                        schedine_inserite[s['id']] = st.text_input(f"URL Schedina - {s['nome_squadra']}", key=f"sch_{s['id']}")
+                    
+                    if st.form_submit_button("Carica Schedine"):
+                        for s_id, url in schedine_inserite.items():
+                            if url and url.startswith("http"):
+                                supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
+                                supabase.table("schedine").insert({
+                                    "squadra_id": s_id, 
+                                    "giornata": num_g_sch, 
+                                    "schedina_url": url
+                                }).execute()
+                        st.success("Schedine caricate!")
+                        st.rerun()
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+                        
+        with tab4:
+            st.write("### Elimina Squadra")
+            if squadre_list:
+                sq_del = st.selectbox("Squadra", [s['nome_squadra'] for s in squadre_list], key="sq_del_tot")
+                if st.button("Elimina Squadra e Dati"):
+                    s_id = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_del)
+                    supabase.table("squadre").delete().eq("id", s_id).execute()
+                    supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
+                    supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
+                    st.success("Squadra eliminata!")
+                    st.rerun()
+            else:
+                st.info("Nessuna squadra presente.")
 
 # --- MENU E LOGICA PAGINE ---
 st.title("⚽ FantaBet Serie A")
@@ -152,7 +245,7 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            for s in sorted(schedine_dict.keys() if False else squadre, key=lambda x: x['nome_squadra']):
+            for s in sorted(squadre, key=lambda x: x['nome_squadra']):
                 logo_html = f"<img src='{s.get('logo_url')}' style='width:35px; height:35px; border-radius:50%; object-fit:cover; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
                 st.markdown(f"<div style='display:flex; align-items:center; margin-top:15px;'>{logo_html} <h3>{s['nome_squadra']}</h3></div>", unsafe_allow_html=True)
                 url = schedine_dict.get(s['id'])
