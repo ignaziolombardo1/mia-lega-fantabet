@@ -162,16 +162,20 @@ def analizza_schedine_ia(giornata, supabase_client):
                     'data': image_bytes
                 }]
 
-                prompt_testo = f"""Analizza con massima precisione questa schedina della Giornata {giornata} di Serie A.
-                Il tuo compito è:
-                1. Leggere i nomi delle squadre e i relativi pronostici (1, X, 2 o altri esiti).
-                2. Confrontare i pronostici con i risultati reali della {giornata} giornata di Serie A.
-                3. Assegnare 1 punto per ogni pronostico indovinato.
-                4. Restituisci la risposta ESCLUSIVAMENTE in formato JSON, senza commenti extra:
+                # PROMPT ULTRA-RIGIDO E STRUTTURATO
+                prompt_testo = f"""Sei un assistente super rigoroso specializzato nel controllo di schedine del fantacalcio/pronostici per la Giornata {giornata} di Serie A.
+                
+                Analizza questa immagine con la massima attenzione visiva:
+                1. Leggi ogni singolo pronostico presente nella schedina (es. 1, X, 2, Goal, No Goal, Over/Under).
+                2. Considera i risultati ufficiali reali della {giornata}ª giornata di Serie A.
+                3. Assegna ESATTAMENTE 1 punto per ogni pronostico che risulta corretto. Assegna 0 punti se è errato.
+                4. Somma tutti i punti ottenuti.
+                
+                Restituisci la risposta UNICAMENTE in formato JSON puro, senza aggiungere testo prima o dopo, rispettando questa struttura:
                 {{
-                    "punteggio_totale": [numero_totale_punti]
+                    "punteggio_totale": [numero_totale_di_punti_numerico]
                 }}
-                Se l'immagine non è leggibile, restituisci "punteggio_totale": 0.
+                Se l'immagine non è leggibile o non è una schedina valida, restituisci: {{"punteggio_totale": 0}}
                 """
                 
                 response = model.generate_content([image_parts[0], prompt_testo])
