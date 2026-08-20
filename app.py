@@ -40,8 +40,59 @@ st.markdown("""
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    
+    /* Stile per la schermata di caricamento iniziale (Splash Screen con dissolvenza CSS pura) */
+    .splash-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #0E1117;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 99999;
+        animation: fadeOut 0.6s ease-in-out 1.5s forwards;
+        pointer-events: none;
+    }
+    @keyframes fadeOut {
+        to { opacity: 0; visibility: hidden; }
+    }
+    .pulse-logo {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #4CAF50;
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(76, 175, 80, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    }
     </style>
 """, unsafe_allow_html=True)
+
+# =========================================================
+# GESTIONE SICURA SPLASH SCREEN (SENZA LOOP DI RERUN)
+# =========================================================
+
+if "splash_mostrato" not in st.session_state:
+    st.session_state.splash_mostrato = True
+    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
+    
+    # Mostriamo la schermata tramite HTML/CSS puro che svanisce da solo in 1.5 secondi
+    st.markdown(f"""
+        <div class="splash-screen">
+            <img src="{logo_splash_url}" class="pulse-logo" />
+            <h2 style="color: #FAFAFA; margin-top: 20px; font-family: sans-serif;">FantaBet Serie A Pro</h2>
+            <p style="color: #888; font-size: 0.9em;">Caricamento in corso...</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # =========================================================
 # FUNZIONI DI SUPPORTO E LOGICA DEL BOT
@@ -436,7 +487,7 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="flex-grow:1; margin-left:5px; font-weight:bold; font-size:1.1em;">{item['nome']}</span>
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
-            if not is_coppa:
+            if not ist_coppa if 'ist_coppa' in locals() else not is_coppa:
                 with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
                         df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
