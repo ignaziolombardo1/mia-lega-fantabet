@@ -103,6 +103,19 @@ with st.sidebar:
                                 }).execute()
                         st.success("Punti aggiornati con successo!")
                         st.rerun()
+                
+                st.markdown("---")
+                st.write("### Azzera Punti Squadra")
+                with st.form("reset_p_single"):
+                    g_reset = st.selectbox("Giornata da azzerare", lista_giornate_etichette, index=giornata_idx, key="g_reset_pts")
+                    num_g_reset = int(g_reset.split()[1])
+                    sq_reset = st.selectbox("Squadra", [s['nome_squadra'] for s in sorted(squadre_list, key=lambda x: x['nome_squadra'])], key="sq_reset_pts")
+                    
+                    if st.form_submit_button("Azzera Punti Squadra"):
+                        s_id_reset = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_reset)
+                        supabase.table("risultati").delete().eq("squadra_id", s_id_reset).eq("giornata", num_g_reset).execute()
+                        st.success(f"Punti azzerati per {sq_reset} nella Giornata {num_g_reset}!")
+                        st.rerun()
             else:
                 st.info("Aggiungi prima almeno una squadra.")
                 
@@ -132,6 +145,26 @@ with st.sidebar:
                 st.info("Aggiungi prima almeno una squadra.")
                         
         with tab4:
+            st.write("### Elimina Schedina")
+            g_del = st.selectbox("Giornata Schedina", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
+            num_g_del = int(g_del.split()[1])
+            try:
+                schedine_g = supabase.table("schedine").select("squadra_id").eq("giornata", num_g_del).execute().data
+                squadre_con_schedina = [s for s in squadre_list if s['id'] in [sch['squadra_id'] for sch in schedine_g]] if squadre_list else []
+            except:
+                squadre_con_schedina = []
+            
+            if squadre_con_schedina:
+                sq_sch_del = st.selectbox("Squadra Schedina", [s['nome_squadra'] for s in squadre_con_schedina], key="sq_sch_del")
+                if st.button("Elimina Schedina"):
+                    s_id_del = next(s['id'] for s in squadre_con_schedina if s['nome_squadra'] == sq_sch_del)
+                    supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
+                    st.success("Schedina eliminata!")
+                    st.rerun()
+            else:
+                st.info("Nessuna schedina trovata in questa giornata.")
+                
+            st.markdown("---")
             st.write("### Elimina Squadra")
             if squadre_list:
                 sq_del = st.selectbox("Squadra", [s['nome_squadra'] for s in squadre_list], key="sq_del_tot")
