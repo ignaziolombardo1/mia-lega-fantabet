@@ -39,7 +39,7 @@ st.markdown("""
     .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 30px; border-radius: 20px; text-align: center; margin: 25px 0; box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
-    .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -229,7 +229,6 @@ with st.sidebar:
             st.caption("Seleziona la giornata e carica le foto per tutte le squadre comodamente insieme.")
             
             if squadre:
-                # Ordinamento alfabetico anche nel pannello admin per comodità
                 squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
@@ -448,7 +447,7 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
         st.info("Nessuna squadra configurata nel database.")
 
 elif st.session_state.current_page == "Schedine":
-    st.title("📅 Archivio Schedine (Galleria)")
+    st.title("📅 Archivio Schedine")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
     num_g = int(giornata_scelta.split(" ")[1])
     
@@ -457,21 +456,19 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            # Ordinamento alfabetico forzato per la visualizzazione delle schedine (ottimizzato anche per mobile)
+            # Ordinamento rigorosamente alfabetico sequenziale (ottimizzato e perfetto sia su PC che su smartphone)
             squadre_ordinate = sorted(squadre, key=lambda x: x['nome_squadra'])
             
-            cols = st.columns(3)
-            for idx, s in enumerate(squadre_ordinate):
-                with cols[idx % 3]:
-                    logo_html = f"<img src='{s.get('logo_url')}' style='width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px;' />" if s.get('logo_url') else "⚽ "
-                    st.markdown(f"<div class='grid-card'>{logo_html}<b>{s['nome_squadra']}</b>", unsafe_allow_html=True)
-                    url = schedine_dict.get(s['id'])
-                    if url: 
-                        st.image(url, use_container_width=True)
-                        st.markdown(f"[🔍 Schermo Intero]({url})")
-                    else: 
-                        st.caption("Nessuna schedina caricata.")
-                    st.markdown("</div>", unsafe_allow_html=True)
+            for s in squadre_ordinate:
+                logo_html = f"<img src='{s.get('logo_url')}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
+                st.markdown(f"<div class='grid-card'>{logo_html}<b style='font-size:1.1em;'>{s['nome_squadra']}</b>", unsafe_allow_html=True)
+                url = schedine_dict.get(s['id'])
+                if url: 
+                    st.image(url, use_container_width=True)
+                    st.markdown(f"[🔍 Apri Schedina a Schermo Intero]({url})")
+                else: 
+                    st.caption("Nessuna schedina caricata per questa giornata.")
+                st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("Nessuna squadra registrata.")
     except Exception as e:
