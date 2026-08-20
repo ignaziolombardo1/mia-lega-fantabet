@@ -99,7 +99,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E BOT IA (GEMINI 3.6 FLASH)
+# FUNZIONI DI SUPPORTO E TRASCRIZIONE IA (GEMINI 3.6 FLASH)
 # =========================================================
 
 def get_giornata_corrente():
@@ -134,15 +134,15 @@ except Exception:
 
 lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
 
-def analizza_schedine_ia(giornata, supabase_client):
+def trascrivi_schedina_ia(giornata, supabase_client):
+    """Il bot si limita a leggere i pronostici dall'immagine per aiutarti nel controllo visivo."""
     try:
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
-            return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
+            return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto."
             
         model = genai.GenerativeModel('gemini-3.6-flash')
         report = []
-        dati_punti_esatti = {}
 
         for s in schedine:
             schedina_url = s.get('schedina_url')
@@ -157,52 +157,26 @@ def analizza_schedine_ia(giornata, supabase_client):
                 req = urllib.request.urlopen(schedina_url)
                 image_bytes = req.read()
                 
-                image_parts = [{
-                    'mime_type': 'image/jpeg',
-                    'data': image_bytes
-                }]
+                image_parts = [{'mime_type': 'image/jpeg', 'data': image_bytes}]
 
-                # PROMPT ULTRA-RIGIDO E STRUTTURATO
-                prompt_testo = f"""Sei un assistente super rigoroso specializzato nel controllo di schedine del fantacalcio/pronostici per la Giornata {giornata} di Serie A.
-                
-                Analizza questa immagine con la massima attenzione visiva:
-                1. Leggi ogni singolo pronostico presente nella schedina (es. 1, X, 2, Goal, No Goal, Over/Under).
-                2. Considera i risultati ufficiali reali della {giornata}ª giornata di Serie A.
-                3. Assegna ESATTAMENTE 1 punto per ogni pronostico che risulta corretto. Assegna 0 punti se è errato.
-                4. Somma tutti i punti ottenuti.
-                
-                Restituisci la risposta UNICAMENTE in formato JSON puro, senza aggiungere testo prima o dopo, rispettando questa struttura:
-                {{
-                    "punteggio_totale": [numero_totale_di_punti_numerico]
-                }}
-                Se l'immagine non è leggibile o non è una schedina valida, restituisci: {{"punteggio_totale": 0}}
-                """
+                prompt_testo = """Trascrivi chiaramente tutti i pronostici e le partite che vedi in questa schedina. Elenca le partite e i segni/risultati scelti in modo sintetico e leggibile."""
                 
                 response = model.generate_content([image_parts[0], prompt_testo])
                 testo_risposta = response.text.strip()
                 
-                if testo_risposta.startswith("```json"):
-                    testo_risposta = testo_risposta[7:]
-                if testo_risposta.endswith("```"):
-                    testo_risposta = testo_risposta[:-3]
-                
-                risposta_json = json.loads(testo_risposta.strip())
-                punti = int(risposta_json.get("punteggio_totale", 0))
-                
-                dati_punti_esatti[s['squadra_id']] = punti
-                report.append(f"Squadra: {nome_squadra} | Punti calcolati: {punti}")
+                report.append(f"📌 **{nome_squadra}**:\n{testo_risposta}\n" + "-"*30)
                 
             except Exception as ex:
-                report.append(f"Squadra: {nome_squadra} | Errore IA ({str(ex)})")
+                report.append(f"📌 **{nome_squadra}** | Errore lettura immagine: {str(ex)}\n" + "-"*30)
                 continue
         
-        return True, "\n".join(report), dati_punti_esatti
+        return True, "\n".join(report)
         
     except Exception as e:
-        return False, f"Errore generale nel bot: {str(e)}", {}
+        return False, f"Errore generale: {str(e)}"
 
 # =========================================================
-# BARRA LATERALE ADMIN
+# BARRA LATERALE ADMIN POTENZIATA
 # =========================================================
 
 with st.sidebar:
@@ -223,7 +197,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Bot IA", "🎫 Schedine", "⚽ Punti", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Trascrizione IA", "🎫 Schedine", "⚽ Punti Manuali", "🗑️ Elimina"])
         
         with tab1:
             with st.form("add_s"):
@@ -252,34 +226,19 @@ with st.sidebar:
                         st.warning("Inserisci il nome della squadra.")
 
         with tab2:
-            st.write("### 🤖 Bot Valutazione Schedine (Max 10 Partite)")
-            st.caption("Il bot analizza le schedine, calcola i punti in autonomia e ti permette di caricarli con un click.")
-            g_auto = st.selectbox("Giornata da Valutare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
+            st.write("### 🤖 Assistente Trascrizione Schedine")
+            st.caption("Usa l'IA solo per leggere ed estrarre i pronostici dalle immagini caricate. Ti aiuterà a controllare visivamente cosa ha giocato ogni squadra prima di assegnare i punti nella sezione Punti Manuali.")
+            g_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
             
-            if st.button("🚀 Avvia Analisi IA e Calcola Punti"):
-                with st.spinner("Il bot sta analizzando le schedine..."):
-                    successo, messaggio, risultati_bot = analizza_schedine_ia(num_g_auto, supabase)
+            if st.button("🔍 Leggi Schedine con IA"):
+                with st.spinner("Estrazione pronostici in corso..."):
+                    successo, messaggio = trascrivi_schedina_ia(num_g_auto, supabase)
                     if successo:
-                        st.success("Analisi completata!")
-                        st.text_area("Risultato del Bot:", value=messaggio, height=180)
-                        st.session_state["temp_risultati_bot"] = risultati_bot
-                        st.session_state["temp_giornata_bot"] = num_g_auto
+                        st.success("Lettura completata!")
+                        st.markdown(messaggio)
                     else:
                         st.error(messaggio)
-            
-            if "temp_risultati_bot" in st.session_state and st.session_state["temp_risultati_bot"]:
-                st.markdown("---")
-                if st.button("📥 Inserisci nella classifica", type="primary"):
-                    g_target = st.session_state["temp_giornata_bot"]
-                    for s_id, pt in st.session_state["temp_risultati_bot"].items():
-                        supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", g_target).execute()
-                        supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": pt, "giornata": g_target}).execute()
-                    
-                    st.toast("Punti inseriti con successo nella classifica!", icon="🎉")
-                    del st.session_state["temp_risultati_bot"]
-                    time.sleep(1.2)
-                    st.rerun()
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
@@ -330,16 +289,25 @@ with st.sidebar:
                 st.info("Nessuna squadra disponibile.")
                 
         with tab4:
-            st.write("### Inserisci o Modifica Punti")
+            st.write("### ⚽ Gestione Punti Manuali (100% Sicuro)")
+            st.caption("Inserisci direttamente il punteggio esatto ottenuto da ogni squadra nella giornata selezionata.")
             if squadre:
                 squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
+                
+                # Recupera i punti già inseriti per la giornata corrente per mostrarli come default nei campi se presenti
+                g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
+                num_g_pts = int(g_pts.split()[1])
+                
+                existing_res = {r['squadra_id']: r['punteggio'] for r in supabase.table("risultati").select("squadra_id, punteggio").eq("giornata", num_g_pts).execute().data or []}
+
                 with st.form("add_p_multi"):
-                    g_pts = st.selectbox("Giornata Punti", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
-                    num_g_pts = int(g_pts.split()[1])
-                    punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre_ordinate_admin}
+                    punti_inseriti = {}
+                    for s in squadre_ordinate_admin:
+                        valore_precedente = existing_res.get(s['id'], 0)
+                        punti_inseriti[s['id']] = st.number_input(f"Punti {s['nome_squadra']}", min_value=0, value=int(valore_precedente), step=1, key=f"pts_{s['id']}")
                     
                     col_form1, col_form2 = st.columns(2)
-                    salva_punti = col_form1.form_submit_button("Aggiorna Punti")
+                    salva_punti = col_form1.form_submit_button("💾 Salva Tutti i Punti", type="primary")
                     azzera_giornata = col_form2.form_submit_button("🗑️ Azzera Giornata")
                     
                     if salva_punti:
@@ -347,7 +315,7 @@ with st.sidebar:
                             supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
                             if p >= 0:
                                 supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_pts}).execute()
-                        st.toast("Punti aggiornati con successo!", icon="✅")
+                        st.toast("Punti aggiornati con successo nella classifica!", icon="✅")
                         time.sleep(1.0)
                         st.rerun()
                         
