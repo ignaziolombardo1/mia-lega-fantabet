@@ -8,11 +8,13 @@ import json
 from openai import OpenAI
 
 # =========================================================
-# CONFIGURAZIONE INIZIALE E STILE
+# CONFIGURAZIONE INIZIALE E CREDENZIALI
 # =========================================================
 
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
+OPENAI_API_KEY = "Sk-proj-prFAyxFxYmX-zShW0ExfbbXm-7Wugcs8vH9BeEdiIEpei7OGD5wiZkCgKi33L7_YwMeUg3cy-BT3BlbkFJ3342IqvX9X_481XBXX7Vm-agtjflT1Y9xqskESh1ezoeb1SOFnShP7WxbOWOq9xhfvDft_u2oA"
+
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "fantabet"
 
@@ -42,7 +44,6 @@ st.markdown("""
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     
-    /* Splash Screen con dissolvenza CSS pura e Logo Pulsante */
     .splash-screen {
         position: fixed;
         top: 0;
@@ -95,7 +96,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E LOGICA DEL BOT IA (AGGIORNATO)
+# FUNZIONI DI SUPPORTO E BOT IA
 # =========================================================
 
 def get_giornata_corrente():
@@ -135,18 +136,8 @@ def analizza_schedine_ia(giornata, supabase_client):
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
-        
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            try:
-                api_key = st.secrets.get("OPENAI_API_KEY")
-            except Exception:
-                pass
-                
-        if not api_key:
-            return False, "Chiave OpenAI non trovata nei secrets o nelle variabili d'ambiente.", {}
             
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=OPENAI_API_KEY)
         report = []
         dati_punti_esatti = {}
 
@@ -159,7 +150,6 @@ def analizza_schedine_ia(giornata, supabase_client):
             nome_squadra = sq_obj['nome_squadra'] if sq_obj else f"Squadra ID {s['squadra_id']}"
             
             try:
-                # Prompt aggiornato: max 10 partite, calcolo autonomo dei punti
                 prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A. 
                 Prendi in considerazione un massimo di 10 partite presenti nella schedina.
                 Valuta in autonomia i risultati reali di quelle partite e calcola i punti totali fatti da questa squadra.
@@ -199,7 +189,7 @@ def analizza_schedine_ia(giornata, supabase_client):
         return False, f"Errore generale nel bot: {str(e)}", {}
 
 # =========================================================
-# BARRA LATERALE (AREA AMMINISTRATORE PRO)
+# BARRA LATERALE ADMIN
 # =========================================================
 
 with st.sidebar:
@@ -280,8 +270,6 @@ with st.sidebar:
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
-            st.caption("Seleziona la giornata e carica le foto per tutte le squadre comodamente insieme.")
-            
             if squadre:
                 squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
@@ -289,7 +277,6 @@ with st.sidebar:
                 
                 st.markdown("---")
                 dati_caricamento = {}
-                
                 for s in squadre_ordinate_admin:
                     st.markdown(f"<div class='schedina-box'><b>⚽ {s['nome_squadra']}</b>", unsafe_allow_html=True)
                     f_foto = st.file_uploader(f"Screenshot Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"foto_{s['id']}")
@@ -325,7 +312,7 @@ with st.sidebar:
                             time.sleep(1.2)
                             st.rerun()
                         else:
-                            st.warning("Nessuna foto caricata. Assicurati di aver allegato almeno uno screenshot.")
+                            st.warning("Nessuna foto caricata.")
             else:
                 st.info("Nessuna squadra disponibile.")
                 
@@ -336,7 +323,6 @@ with st.sidebar:
                 with st.form("add_p_multi"):
                     g_pts = st.selectbox("Giornata Punti", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                     num_g_pts = int(g_pts.split()[1])
-                    
                     punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre_ordinate_admin}
                     
                     col_form1, col_form2 = st.columns(2)
@@ -379,7 +365,7 @@ with st.sidebar:
                     time.sleep(1.0)
                     st.rerun()
             else:
-                st.info("Nessuna schedina presente per questa giornata.")
+                st.info("Nessuna schedina presente.")
                 
             st.markdown("---")
             if squadre:
@@ -395,7 +381,7 @@ with st.sidebar:
                     st.rerun()
 
 # =========================================================
-# INTERFACCIA PRINCIPALE E NAVIGAZIONE
+# INTERFACCIA PRINCIPALE
 # =========================================================
 
 st.title("⚽ FantaBet Serie A Pro")
@@ -496,9 +482,9 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
                         st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
                     else:
-                        st.info("Nessun punteggio registrato per questa squadra.")
+                        st.info("Nessun punteggio registrato.")
     else:
-        st.info("Nessuna squadra configurata nel database.")
+        st.info("Nessuna squadra configurata.")
 
 elif st.session_state.current_page == "Schedine":
     st.title("📅 Archivio Schedine")
@@ -511,7 +497,6 @@ elif st.session_state.current_page == "Schedine":
         
         if squadre:
             squadre_ordinate = sorted(squadre, key=lambda x: x['nome_squadra'])
-            
             for s in squadre_ordinate:
                 logo_html = f"<img src='{s.get('logo_url')}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:10px;' />" if s.get('logo_url') else "⚽ "
                 st.markdown(f"<div class='grid-card'>{logo_html}<b style='font-size:1.1em;'>{s['nome_squadra']}</b>", unsafe_allow_html=True)
@@ -520,7 +505,7 @@ elif st.session_state.current_page == "Schedine":
                     st.image(url, use_container_width=True)
                     st.markdown(f"[🔍 Apri Schedina a Schermo Intero]({url})")
                 else: 
-                    st.caption("Nessuna schedina caricata per questa giornata.")
+                    st.caption("Nessuna schedina caricata.")
                 st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("Nessuna squadra registrata.")
