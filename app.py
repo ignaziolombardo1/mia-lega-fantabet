@@ -5,6 +5,7 @@ import pandas as pd
 import time
 import os
 import json
+import requests
 from openai import OpenAI
 
 # =========================================================
@@ -137,6 +138,41 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto."
         
+        # 2. Scarica i risultati reali tramite RapidAPI (API-Football)
+        rapidapi_key = os.environ.get("RAPIDAPI_KEY")
+        if not rapidapi_key:
+            try:
+                rapidapi_key = st.secrets.get("RAPIDAPI_KEY")
+            except Exception:
+                pass
+
+        risultati_reali_str = ""
+        if rapidapi_key:
+            url_api = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
+            querystring = {"league": "135", "season": "2026", "round": f"Regular Season - {giornata}"}
+            headers = {
+                "X-RapidAPI-Key": rapidapi_key,
+                "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
+            }
+            try:
+                res_api = requests.get(url_api, headers=headers, params=querystring)
+                if res_api.status_code == 200:
+                    fixtures = res_api.json().get("response", [])
+                    match_elenco = []
+                    for fx in fixtures:
+                        casa = fx["teams"]["home"]["name"]
+                        trasferta = fx["teams"]["away"]["name"]
+                        if fx["fixture"]["status"]["short"] == "FT":
+                            gc = fx["goals"]["home"]
+                            gt = fx["goals"]["away"]
+                            segno = "1" if gc > gt else ("2" if gc < gt else "X")
+                            match_elenco.append(f"- {casa} vs {trasferta}: {gc}-{gt} (Esito: {segno})")
+                    if match_elenco:
+                        risultati_reali_str = "Risultati ufficiali della giornata:\n" + "\n".join(match_elenco)
+            except Exception as e:
+                print(f"Errore chiamata API calcio: {e}")
+
+        # 3. Configura OpenAI
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             try:
@@ -156,10 +192,11 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 continue
             
             try:
-                # Prompt intelligente: l'IA legge la schedina e calcola i punti in autonomia basandosi sui risultati reali
-                prompt_testo = f"""Analizza questa immagine di una schedina della Giornata {giornata} di Serie A.
-                1. Estrai i pronostici delle partite presenti (es. 1, X, 2).
-                2. Sulla base dei risultati ufficiali reali della Giornata {giornata} di Serie A, verifica ogni pronostico assegnando 1 punto per ogni esito corretto e 0 per quelli errati.
+                prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A.
+                {risultati_reali_str}
+                
+                1. Estrai i pronostici delle partite presenti nella schedina (es. 1, X, 2).
+                2. Sulla base dei risultati reali ufficiali forniti sopra, verifica ogni pronostico assegnando 1 punto per ogni esito corretto e 0 per quelli errati.
                 Restituisci la risposta ESCLUSIVAMENTE in formato JSON con questa struttura esatta, senza altri testi:
                 {{
                     "pronostici": ["1", "X", "2", ...],
@@ -189,7 +226,7 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 report.append(f"Squadra ID {s['squadra_id']}: Errore lettura IA ({str(ex)})")
                 continue
             
-            # 2. Aggiorna o inserisce il punteggio calcolato nel database Supabase
+            # Salva o aggiorna il punteggio calcolato nel database Supabase
             supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
             
             supabase_client.table("risultati").insert({
@@ -257,7 +294,7 @@ with st.sidebar:
 
         with tab2:
             st.write("### 🤖 Bot Intelligente Schedine")
-            st.caption("Il bot legge in autonomia le foto caricate, individua i pronostici e calcola i punti confrontandoli con i risultati reali.")
+            st.caption("Il bot scarica i risultati reali tramite API, legge le foto e calcola i punti in autonomia.")
             g_auto = st.selectbox("Giornata da Analizzare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
             
