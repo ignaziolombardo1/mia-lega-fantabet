@@ -8,12 +8,13 @@ import json
 from openai import OpenAI
 
 # =========================================================
-# CONFIGURAZIONE INIZIALE E CREDENZIALI
+# CONFIGURAZIONE INIZIALE E CREDENZIALI (SICURA)
 # =========================================================
 
-SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
-SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
-OPENAI_API_KEY = "Sk-proj-prFAyxFxYmX-zShW0ExfbbXm-7Wugcs8vH9BeEdiIEpei7OGD5wiZkCgKi33L7_YwMeUg3cy-BT3BlbkFJ3342IqvX9X_481XBXX7Vm-agtjflT1Y9xqskESh1ezoeb1SOFnShP7WxbOWOq9xhfvDft_u2oA"
+# Legge chiavi e URL direttamente dai segreti protetti di Streamlit
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 BUCKET_NAME = "fantabet"
