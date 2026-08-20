@@ -3,31 +3,32 @@ import io
 
 def crea_immagine_schedina(nome_squadra, giornata, pronostici_dict):
     """
-    nome_squadra: Stringa
-    giornata: Int
-    pronostici_dict: Dizionario, es: {"Inter-Juve": "1", "Roma-Lazio": "X"}
+    pronostici_dict: Dizionario con le partite e i pronostici (es. {"Inter-Milan": "1", ...})
     """
-    # Creiamo un'immagine con fondo scuro (stile FantaBet)
-    width, height = 400, 500
+    # Immagine più alta per contenere comodamente 10 partite
+    width, height = 450, 600
     img = Image.new('RGB', (width, height), color='#0E1117')
     draw = ImageDraw.Draw(img)
     
-    # Carichiamo un font (usiamo quello di default)
     try:
-        font_titolo = ImageFont.truetype("arial.ttf", 30)
-        font_testo = ImageFont.truetype("arial.ttf", 20)
+        font_titolo = ImageFont.truetype("arial.ttf", 22)
+        font_testo = ImageFont.truetype("arial.ttf", 16)
     except:
         font_titolo = ImageFont.load_default()
         font_testo = ImageFont.load_default()
 
-    # Disegniamo il titolo
-    draw.text((20, 20), f"Schedina {nome_squadra}", fill="#4CAF50", font=font_titolo)
-    draw.text((20, 60), f"Giornata n. {giornata}", fill="white", font=font_testo)
+    # Intestazione
+    draw.text((20, 20), f"SCHEDINA: {nome_squadra}", fill="#4CAF50", font=font_titolo)
+    draw.text((20, 50), f"Giornata n. {giornata}", fill="white", font=font_testo)
     
-    # Disegniamo le partite
+    # Linea divisoria
+    draw.line([(20, 80), (430, 80)], fill="#333333", width=2)
+    
+    # Disegniamo le partite e i pronostici
     y = 100
     for partita, segno in pronostici_dict.items():
-        draw.text((20, y), f"{partita}:  {segno}", fill="white", font=font_testo)
+        draw.text((20, y), f"{partita}", fill="white", font=font_testo)
+        draw.text((380, y), f"{segno}", fill="#FFD700", font=font_testo)
         y += 40
         
     # Salva in memoria
