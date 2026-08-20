@@ -3,6 +3,7 @@ from supabase import create_client
 from datetime import datetime
 import pandas as pd
 import time
+import plotly.express as px
 
 # Prova a importare la logica del bot se presente
 try:
@@ -43,6 +44,7 @@ st.markdown("""
     .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 30px; border-radius: 20px; text-align: center; margin: 25px 0; box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
+    .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -86,8 +88,8 @@ with st.sidebar:
         if st.button("Autenticati"):
             if pwd == st.secrets.get("ADMIN_PASSWORD", "admin123"): 
                 st.session_state.admin = True
-                st.success("Accesso consentito!")
-                time.sleep(0.8)
+                st.toast("Accesso effettuato con successo!", icon="🔓")
+                time.sleep(0.6)
                 st.rerun()
             else: 
                 st.error("Password errata")
@@ -119,8 +121,8 @@ with st.sidebar:
                                 st.error(f"Errore caricamento logo: {e}")
                         
                         supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo_url}).execute()
-                        st.success("Squadra salvata con successo!")
-                        time.sleep(1.2)
+                        st.toast("Squadra registrata correttamente!", icon="⚽")
+                        time.sleep(1.0)
                         st.rerun()
                     else:
                         st.warning("Inserisci il nome della squadra.")
@@ -135,8 +137,8 @@ with st.sidebar:
                 with st.spinner("Elaborazione risultati in corso..."):
                     successo, messaggio = calcola_risultati_da_foto_o_dati(num_g_auto, supabase)
                     if successo:
-                        st.success(messaggio)
-                        time.sleep(1.2)
+                        st.toast(messaggio, icon="🤖")
+                        time.sleep(1.0)
                         st.rerun()
                     else:
                         st.error(messaggio)
@@ -150,15 +152,12 @@ with st.sidebar:
                 num_g_sch = int(g_sch.split()[1])
                 
                 st.markdown("---")
-                
-                # Dizionario per raccogliere i file caricati per ogni squadra
                 dati_caricamento = {}
                 
                 for s in squadre:
                     st.markdown(f"<div class='schedina-box'><b>⚽ {s['nome_squadra']}</b>", unsafe_allow_html=True)
                     f_foto = st.file_uploader(f"Screenshot Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"foto_{s['id']}")
                     st.markdown("</div>", unsafe_allow_html=True)
-                    
                     dati_caricamento[s['id']] = f_foto
                 
                 if st.button("💾 Salva Tutte le Schedine Caricate", type="primary"):
@@ -186,13 +185,13 @@ with st.sidebar:
                                     st.error(f"Errore per la squadra ID {s_id}: {e}")
                         
                         if caricate > 0:
-                            st.success(f"Salvate con successo {caricate} schedine!")
-                            time.sleep(1.5)
+                            st.toast(f"Salvate con successo {caricate} schedine!", icon="🎉")
+                            time.sleep(1.2)
                             st.rerun()
                         else:
                             st.warning("Nessuna foto caricata. Assicurati di aver allegato almeno uno screenshot.")
             else:
-                st.info("Nessuna squadra disponibile. Aggiungine prima una.")
+                st.info("Nessuna squadra disponibile.")
                     
         with tab4:
             st.write("### Inserisci Punti Manuali")
@@ -208,8 +207,8 @@ with st.sidebar:
                             supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
                             if p >= 0:
                                 supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_pts}).execute()
-                        st.success("Punti salvati!")
-                        time.sleep(1.2)
+                        st.toast("Punti aggiornati con successo!", icon="✅")
+                        time.sleep(1.0)
                         st.rerun()
             else:
                 st.info("Inserisci prima le squadre.")
@@ -229,8 +228,8 @@ with st.sidebar:
                 if st.button("Elimina Schedina"):
                     s_id_del = next(s['id'] for s in squadre_con_schedina if s['nome_squadra'] == sq_sch_del)
                     supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
-                    st.success("Schedina rimossa!")
-                    time.sleep(1.2)
+                    st.toast("Schedina rimossa correttamente.", icon="🗑️")
+                    time.sleep(1.0)
                     st.rerun()
             else:
                 st.info("Nessuna schedina presente per questa giornata.")
@@ -243,8 +242,8 @@ with st.sidebar:
                     supabase.table("squadre").delete().eq("id", s_id).execute()
                     supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
                     supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
-                    st.success("Squadra eliminata correttamente!")
-                    time.sleep(1.2)
+                    st.toast("Squadra e dati eliminati.", icon="⚠️")
+                    time.sleep(1.0)
                     st.rerun()
 
 # --- INTERFACCIA PRINCIPALE ---
@@ -306,7 +305,7 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                     if classifica[i]['logo']: st.markdown(logo_p, unsafe_allow_html=True)
                     st.write(f"**{classifica[i]['punti']} Punti**")
         
-        # Vincitore Unico per le Coppe (Inverno: fine giornata 17, Primavera: fine giornata 32)
+        # Vincitore Unico per le Coppe
         if is_coppa:
             fine_coppa = 17 if st.session_state.current_page == "Coppa Inverno" else 32
             if fine_coppa in giornate_registrate_set and classifica and classifica[0]['punti'] > 0:
@@ -337,17 +336,23 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
             if not is_coppa:
-                with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
+                with st.expander(f"📊 Dettaglio e Trend - {item['nome']}"):
                     if item['dettaglio']:
-                        df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
-                        st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
+                        col_tab, col_graf = st.columns([1, 1.2])
+                        with col_tab:
+                            df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
+                            st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
+                        with col_graf:
+                            fig = px.line(df_dettaglio, x='Giornata', y='Punti', markers=True, title=f"Trend Punti - {item['nome']}")
+                            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#FAFAFA', margin=dict(l=10, r=10, t=30, b=10))
+                            st.plotly_chart(fig, use_container_width=True)
                     else:
                         st.info("Nessun punteggio registrato per questa squadra.")
     else:
-        st.info("Nessuna squadra configurata nel database. Accedi all'Area Admin per aggiungerne.")
+        st.info("Nessuna squadra configurata nel database.")
 
 elif st.session_state.current_page == "Schedine":
-    st.title("📅 Archivio Schedine")
+    st.title("📅 Archivio Schedine (Galleria)")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
     num_g = int(giornata_scelta.split(" ")[1])
     
@@ -356,15 +361,18 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            for s in squadre:
-                logo_html = f"<img src='{s.get('logo_url')}' style='width:40px; height:40px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if s.get('logo_url') else "⚽ "
-                st.markdown(f"<div style='display:flex; align-items:center; margin-top:20px;'>{logo_html} <h2>{s['nome_squadra']}</h2></div>", unsafe_allow_html=True)
-                url = schedine_dict.get(s['id'])
-                if url: 
-                    st.image(url, width=320)
-                    st.markdown(f"[🔗 Apri Immagine a Schermo Intero]({url})")
-                else: 
-                    st.caption("Nessuna schedina caricata per questa giornata.")
-                st.markdown("---")
+            # Griglia a 3 colonne per le schedine
+            cols = st.columns(3)
+            for idx, s in enumerate(squadre):
+                with cols[idx % 3]:
+                    logo_html = f"<img src='{s.get('logo_url')}' style='width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px;' />" if s.get('logo_url') else "⚽ "
+                    st.markdown(f"<div class='grid-card'>{logo_html}<b>{s['nome_squadra']}</b>", unsafe_allow_html=True)
+                    url = schedine_dict.get(s['id'])
+                    if url: 
+                        st.image(url, use_container_width=True)
+                        st.markdown(f"[🔍 Schermo Intero]({url})")
+                    else: 
+                        st.caption("Nessuna schedina caricata.")
+                    st.markdown("</div>", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Errore nel recupero delle schedine: {e}")
