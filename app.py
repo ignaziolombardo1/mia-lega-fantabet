@@ -49,7 +49,7 @@ giornata_idx = get_giornata_corrente() - 1
 if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
 if "admin" not in st.session_state: st.session_state.admin = False
 
-# Funzioni di caricamento dati sicure
+# Funzioni di caricamento dati
 @st.cache_data(ttl=60)
 def carica_dati_db():
     try:
@@ -172,15 +172,36 @@ with st.sidebar:
                 st.info("Aggiungi prima almeno una squadra.")
                     
         with tab4:
-            st.write("### Elimina Dati")
+            st.write("### Elimina Schedina")
+            g_del = st.selectbox("Giornata Schedina", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
+            num_g_del = int(g_del.split()[1])
+            try:
+                schedine_g = supabase.table("schedine").select("squadra_id").eq("giornata", num_g_del).execute().data or []
+                squadre_con_schedina = [s for s in squadre if s['id'] in [sch['squadra_id'] for sch in schedine_g]]
+            except:
+                squadre_con_schedina = []
+            
+            if squadre_con_schedina:
+                sq_sch_del = st.selectbox("Squadra Schedina", [s['nome_squadra'] for s in squadre_con_schedina], key="sq_sch_del")
+                if st.button("Elimina Schedina Selezionata"):
+                    s_id_del = next(s['id'] for s in squadre_con_schedina if s['nome_squadra'] == sq_sch_del)
+                    supabase.table("schedine").delete().eq("squadra_id", s_id_del).eq("giornata", num_g_del).execute()
+                    st.success("Schedina eliminata!")
+                    time.sleep(1.5)
+                    st.rerun()
+            else:
+                st.info("Nessuna schedina trovata in questa giornata.")
+                
+            st.markdown("---")
+            st.write("### Elimina Squadra (Totale)")
             if squadre:
-                sq_del = st.selectbox("Squadra", [s['nome_squadra'] for s in squadre], key="sq_del_tot")
+                sq_del = st.selectbox("Squadra da rimuovere", [s['nome_squadra'] for s in squadre], key="sq_del_tot")
                 if st.button("Elimina Squadra e Dati"):
                     s_id = next(s['id'] for s in squadre if s['nome_squadra'] == sq_del)
                     supabase.table("squadre").delete().eq("id", s_id).execute()
                     supabase.table("risultati").delete().eq("squadra_id", s_id).execute()
                     supabase.table("schedine").delete().eq("squadra_id", s_id).execute()
-                    st.success("Eliminato con successo!")
+                    st.success("Squadra eliminata con successo!")
                     time.sleep(1.5)
                     st.rerun()
             else:
