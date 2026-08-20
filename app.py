@@ -8,7 +8,6 @@ import time
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 BUCKET_NAME = "fantabet"
 
 # 2. Configurazione Pagina
@@ -23,16 +22,14 @@ st.markdown("""
     .gold { border-left: 5px solid #FFD700 !important; background: rgba(255, 215, 0, 0.1) !important; }
     .silver { border-left: 5px solid #C0C0C0 !important; background: rgba(192, 192, 192, 0.1) !important; }
     .bronze { border-left: 5px solid #CD7F32 !important; background: rgba(205, 127, 50, 0.1) !important; }
+    .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 20px; border-radius: 15px; text-align: center; margin: 20px 0; }
     </style>
 """, unsafe_allow_html=True)
 
-# Helper
 def get_giornata_corrente():
     oggi = datetime.now().date()
     inizio = datetime(2026, 8, 23).date()
     return max(1, min(38, ((oggi - inizio).days // 7) + 1)) if oggi >= inizio else 1
-
-giornata_idx = get_giornata_corrente() - 1
 
 if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
 if "admin" not in st.session_state: st.session_state.admin = False
@@ -47,37 +44,34 @@ with st.sidebar:
             else: st.error("Password errata")
     else:
         if st.button("Logout"): st.session_state.admin = False; st.rerun()
+        squadre_list = sorted(supabase.table("squadre").select("*").execute().data or [], key=lambda x: x['nome_squadra'])
         
-        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina", "🗑️ Elimina"])
-        squadre_list = supabase.table("squadre").select("*").execute().data or []
-        
+        tab1, tab2, tab3 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina"])
         with tab1:
             with st.form("add_s"):
                 n = st.text_input("Nome Squadra")
-                logo_file = st.file_uploader("Carica Logo", type=["png", "jpg", "jpeg"])
-                if st.form_submit_button("Salva"): 
-                    logo_url = ""
-                    if logo_file:
-                        path = f"loghi/{datetime.now().timestamp()}_{logo_file.name}"
-                        supabase.storage.from_(BUCKET_NAME).upload(path, logo_file.getvalue(), {"content-type": logo_file.type})
-                        logo_url = supabase.storage.from_(BUCKET_NAME).get_public_url(path)
-                    supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo_url}).execute()
-                    st.success("Salvato!"); time.sleep(2); st.rerun()
-        
+                logo = st.file_uploader("Logo", type=["png", "jpg"])
+                if st.form_submit_button("Salva"):
+                    url = ""
+                    if logo:
+                        path = f"loghi/{datetime.now().timestamp()}_{logo.name}"
+                        supabase.storage.from_(BUCKET_NAME).upload(path, logo.getvalue(), {"content-type": logo.type})
+                        url = supabase.storage.from_(BUCKET_NAME).get_public_url(path)
+                    supabase.table("squadre").insert({"nome_squadra": n, "logo_url": url}).execute()
+                    st.success("Salvataggio..."); time.sleep(2); st.rerun()
         with tab2:
             with st.form("add_p"):
                 num_g = st.number_input("Giornata", 1, 38, get_giornata_corrente())
-                pts = {s['id']: st.number_input(s['nome_squadra'], 0, key=f"p_{s['id']}") for s in squadre_list}
-                if st.form_submit_button("Salva Punti"):
+                pts = {s['id']: st.number_input(s['nome_squadra'], 0) for s in squadre_list}
+                if st.form_submit_button("Salva"):
                     for s_id, p in pts.items():
                         supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g).execute()
                         supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g}).execute()
-                    st.success("Aggiornato!"); time.sleep(2); st.rerun()
-
+                    st.success("Salvataggio..."); time.sleep(2); st.rerun()
         with tab3:
             with st.form("add_sch"):
-                num_g = st.number_input("Giornata Schedina", 1, 38, get_giornata_corrente())
-                files = {s['id']: st.file_uploader(f"Schedina {s['nome_squadra']}", type=["jpg", "png"], key=f"sch_{s['id']}") for s in squadre_list}
+                num_g = st.number_input("Giornata", 1, 38, get_giornata_corrente())
+                files = {s['id']: st.file_uploader(f"Schedina {s['nome_squadra']}", type=["jpg", "png"]) for s in squadre_list}
                 if st.form_submit_button("Carica"):
                     for s_id, f in files.items():
                         if f:
@@ -86,35 +80,43 @@ with st.sidebar:
                             url = supabase.storage.from_(BUCKET_NAME).get_public_url(path)
                             supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g).execute()
                             supabase.table("schedine").insert({"squadra_id": s_id, "giornata": num_g, "schedina_url": url}).execute()
-                    st.success("Caricato!"); time.sleep(2); st.rerun()
+                    st.success("Caricamento..."); time.sleep(2); st.rerun()
 
 # --- AREA PUBBLICA ---
 st.title("⚽ FantaBet Serie A")
-col1, col2 = st.columns(2)
-if col1.button("🏆 Classifica", use_container_width=True): st.session_state.current_page = "Classifica"
-if col2.button("📅 Schedine", use_container_width=True): st.session_state.current_page = "Schedine"
+menu = st.columns(4)
+if menu[0].button("🏆 Classifica"): st.session_state.current_page = "Classifica"
+if menu[1].button("📅 Schedine"): st.session_state.current_page = "Schedine"
+if menu[2].button("❄️ Inverno"): st.session_state.current_page = "Coppa Inverno"
+if menu[3].button("🌸 Primavera"): st.session_state.current_page = "Coppa Primavera"
 
 st.markdown("---")
 
-squadre = supabase.table("squadre").select("*").execute().data or []
+squadre = sorted(supabase.table("squadre").select("*").execute().data or [], key=lambda x: x['nome_squadra'])
 risultati = supabase.table("risultati").select("*").execute().data or []
 
-if st.session_state.current_page == "Classifica":
-    classifica = []
-    for s in squadre:
-        p = sum(int(r['punteggio']) for r in risultati if r['squadra_id'] == s['id'])
-        classifica.append({'nome': s['nome_squadra'], 'punti': p, 'logo': s.get('logo_url')})
+def get_punti(s_id, target_g=None):
+    res = [r for r in risultati if r['squadra_id'] == s_id]
+    if target_g: res = [r for r in res if target_g[0] <= r['giornata'] <= target_g[1]]
+    return sum(r['punteggio'] for r in res)
+
+if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Primavera"]:
+    target = None
+    if "Inverno" in st.session_state.current_page: target = (12, 17)
+    if "Primavera" in st.session_state.current_page: target = (27, 32)
     
-    for pos, item in enumerate(sorted(classifica, key=lambda x: -x['punti']), 1):
-        logo_html = f"<img src='{item['logo']}' style='width:40px; height:40px; border-radius:50%; margin-right:10px;' />" if item['logo'] else "⚽ "
-        st.markdown(f"""<div class="card"><div style="display:flex; align-items:center;">
-                    {logo_html} <h5>{pos}° {item['nome']} - {item['punti']} pts</h5>
-                    </div></div>""", unsafe_allow_html=True)
+    classifica = sorted([{'nome': s['nome_squadra'], 'punti': get_punti(s['id'], target), 'logo': s.get('logo_url')} 
+                         for s in squadre], key=lambda x: (-x['punti'], x['nome']))
+    
+    for pos, item in enumerate(classifica, 1):
+        c = "gold" if pos==1 else "silver" if pos==2 else "bronze" if pos==3 else ""
+        logo = f"<img src='{item['logo']}' style='width:40px;height:40px;border-radius:50%;margin-right:10px;' />" if item['logo'] else "⚽ "
+        st.markdown(f"""<div class="card {c}"><div style="display:flex; align-items:center;">
+                    {logo} <h5>{pos}° {item['nome']} - {item['punti']} pts</h5></div></div>""", unsafe_allow_html=True)
 
 elif st.session_state.current_page == "Schedine":
-    num_g = st.selectbox("Seleziona Giornata", range(1, 39), index=giornata_idx)
-    schedine = supabase.table("schedine").select("*").eq("giornata", num_g).execute().data or []
-    sch_dict = {s['squadra_id']: s['schedina_url'] for s in schedine}
+    num_g = st.selectbox("Seleziona Giornata", range(1, 39), index=get_giornata_corrente()-1)
+    sch_dict = {s['squadra_id']: s['schedina_url'] for s in supabase.table("schedine").select("*").eq("giornata", num_g).execute().data or []}
     for s in squadre:
         st.markdown(f"<h5>{s['nome_squadra']}</h5>", unsafe_allow_html=True)
         url = sch_dict.get(s['id'])
