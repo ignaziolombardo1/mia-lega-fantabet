@@ -9,12 +9,12 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
-# 3. Stile CSS
+# 3. Stile CSS (Luminosità dello sfondo aumentata)
 st.markdown("""
     <style>
-    .stApp { background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; }
+    .stApp { background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"); background-size: cover; background-attachment: fixed; }
     h1, h2, h3 { color: #FFFFFF !important; text-shadow: 3px 3px 6px rgba(0, 0, 0, 1); }
-    .card { background-color: rgba(15, 15, 15, 0.9) !important; padding: 15px !important; border-radius: 12px !important; margin-bottom: 12px !important; border-left: 5px solid #4CAF50 !important; }
+    .card { background-color: rgba(15, 15, 15, 0.85) !important; padding: 15px !important; border-radius: 12px !important; margin-bottom: 12px !important; border-left: 5px solid #4CAF50 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -44,37 +44,56 @@ with st.sidebar:
                     supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo}).execute()
                     st.success("Squadra salvata!")
                     st.rerun()
+                    
         with tab2:
-            with st.form("add_p"):
-                sq = st.selectbox("Squadra", [s['nome_squadra'] for s in squadre_list]) if squadre_list else []
-                p = st.number_input("Punti", step=1)
-                g_pts = st.selectbox("Giornata di riferimento", [f"Giornata {i}" for i in range(1, 39)])
-                if st.form_submit_button("Aggiorna"):
-                    if squadre_list:
-                        s_id = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq)
-                        num_g_pts = int(g_pts.split()[1])
-                        supabase.table("risultati").insert({
-                            "squadra_id": s_id, 
-                            "punteggio": p, 
-                            "giornata": num_g_pts
-                        }).execute()
-                        st.success("Punteggio aggiornato!")
+            st.write("### Inserisci Punti Giornata")
+            if squadre_list:
+                with st.form("add_p_multi"):
+                    g_pts = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_pts_multi")
+                    num_g_pts = int(g_pts.split()[1])
+                    
+                    punti_inseriti = {}
+                    for s in sorted(squadre_list, key=lambda x: x['nome_squadra']):
+                        punti_inseriti[s['id']] = st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}")
+                    
+                    if st.form_submit_button("Salva Tutti i Punti"):
+                        for s_id, p in punti_inseriti.items():
+                            if p > 0:
+                                supabase.table("risultati").insert({
+                                    "squadra_id": s_id, 
+                                    "punteggio": p, 
+                                    "giornata": num_g_pts
+                                }).execute()
+                        st.success("Punti aggiornati con successo per tutte le squadre!")
                         st.rerun()
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+                
         with tab3:
-            with st.form("add_sch"):
-                g = st.selectbox("Giornata Schedina", [f"Giornata {i}" for i in range(1, 39)])
-                sq_s = st.selectbox("Squadra", [s['nome_squadra'] for s in squadre_list]) if squadre_list else []
-                u_sch = st.text_input("URL Schedina")
-                if st.form_submit_button("Carica"):
-                    if squadre_list:
-                        s_id = next(s['id'] for s in squadre_list if s['nome_squadra'] == sq_s)
-                        supabase.table("schedine").insert({
-                            "squadra_id": s_id, 
-                            "giornata": int(g.split()[1]), 
-                            "schedina_url": u_sch
-                        }).execute()
-                        st.success("Schedina caricata!")
+            st.write("### Carica Schedine Giornata")
+            if squadre_list:
+                with st.form("add_sch_multi"):
+                    g = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_sch_multi")
+                    num_g_sch = int(g.split()[1])
+                    
+                    schedine_inserite = {}
+                    for s in sorted(squadre_list, key=lambda x: x['nome_squadra']):
+                        schedine_inserite[s['id']] = st.text_input(f"URL Schedina - {s['nome_squadra']}", key=f"sch_{s['id']}")
+                    
+                    if st.form_submit_button("Carica Tutte le Schedine"):
+                        for s_id, url in schedine_inserite.items():
+                            if url and url.startswith("http"):
+                                supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
+                                supabase.table("schedine").insert({
+                                    "squadra_id": s_id, 
+                                    "giornata": num_g_sch, 
+                                    "schedina_url": url
+                                }).execute()
+                        st.success("Schedine caricate con successo!")
                         st.rerun()
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+                        
         with tab4:
             st.write("### Elimina Schedina")
             g_del = st.selectbox("Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_del_sch")
@@ -106,7 +125,7 @@ with st.sidebar:
             else:
                 st.info("Nessuna squadra presente.")
 
-# --- MENU CENTRALE (Classifica e Schedine affiancati) ---
+# --- MENU CENTRALE ---
 c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
 with c1:
     if st.button("🏆 Classifica", use_container_width=True): st.session_state.current_page = "Classifica"
@@ -139,7 +158,7 @@ if st.session_state.current_page == "Classifica":
 # --- PAGINA SCHEDINE ---
 elif st.session_state.current_page == "Schedine":
     st.title("📅 Schedine")
-    giornata = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)])
+    giornata = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_view_sch")
     num_g = int(giornata.split(" ")[1])
     squadre = supabase.table("squadre").select("*").execute().data
     schedine = supabase.table("schedine").select("*").eq("giornata", num_g).execute().data
@@ -171,7 +190,6 @@ elif st.session_state.current_page == "Coppa Inverno":
         
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
-        # Vincitore (da 17 in poi o se ci sono punti)
         if classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
             st.success(f"🏆 Vincitore Coppa Inverno: {classifica_ordinata[0]['nome']} con {classifica_ordinata[0]['punti']} punti!")
         
