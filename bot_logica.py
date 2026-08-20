@@ -8,12 +8,15 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}."
         
-        # 2. Definiamo i risultati reali ufficiali della giornata 
-        # (es. se nella foto ci sono 4 eventi, qui ci saranno i 4 segni reali corrispondenti)
+        # 2. Definiamo i risultati reali ufficiali della giornata
         risultati_reali = ottieni_risultati_reali_giornata(giornata)
         
-        # Inizializziamo il client OpenAI (preleverà la chiave dalle variabili d'ambiente o secrets)
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        # Inizializziamo il client OpenAI
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return False, "Chiave OpenAI non trovata nelle variabili d'ambiente o nei secrets."
+            
+        client = OpenAI(api_key=api_key)
         
         report = []
         for s in schedine:
@@ -21,18 +24,17 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
             if not schedina_url:
                 continue
             
-            # 3. Chiamata a GPT-4o Vision per leggere quanti e quali eventi ci sono
-            # Chiediamo di restituire i pronostici sotto forma di lista pulita (es. ["1", "X", "2", "1"])
             try:
+                # 3. Chiamata a GPT-4o-mini Vision per leggere gli eventi
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini", # Puoi usare gpt-4o o gpt-4o-mini
+                    model="gpt-4o-mini",
                     messages=[
                         {
                             "role": "user",
                             "content": [
                                 {
                                     "type": "text", 
-                                    "text": "Analizza questa schedina di pronostici calcistici. Leggi tutti gli eventi presenti nell'immagine (qualsiasi sia il loro numero). Per ogni evento, estrai il pronostico effettuato (può essere '1', 'X', '2' o doppie/triple se presenti, ma considera il segno principale). Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. Non aggiungere altro testo."
+                                    "text": "Analizza questa schedina di pronostici calcistici. Leggi tutti gli eventi presenti nell'immagine. Per ogni evento, estrai il pronostico effettuato (può essere '1', 'X', '2'). Restituisci la risposta ESCLUSIVAMENTE come una lista Python di stringhe, ad esempio: ['1', 'X', '2', '1']. Non aggiungere altro testo, nessun blocco di codice markdown (come ```python), solo la lista."
                                 },
                                 {
                                     "type": "image_url",
@@ -45,7 +47,9 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 ]
                 
                 risposta_ai = response.choices[0].message.content.strip()
-                # Converte la stringa della risposta in una lista Python reale
+                # Pulisce eventuali formattazioni markdown se l'IA le inserisce per errore
+                risposta_ai = risposta_ai.replace("```python", "").replace("```", "").strip()
+                
                 pronostici_letti = eval(risposta_ai)
                 if not isinstance(pronostici_letti, list):
                     pronostici_letti = []
@@ -53,7 +57,7 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 report.append(f"Squadra ID {s['squadra_id']}: Errore lettura immagine ({str(ex)})")
                 continue
             
-            # 4. Confronto dinamico: conta quanti pronostici coincidono con i risultati reali
+            # 4. Confronto dinamico tra pronostici letti e risultati reali
             punti_ottenuti = 0
             totale_eventi_letti = len(pronostici_letti)
             
@@ -61,7 +65,7 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 if str(pronostici_letti[i]).strip().upper() == str(risultati_reali[i]).strip().upper():
                     punti_ottenuti += 1
             
-            # 5. Salva il punteggio corretto nel database Supabase
+            # 5. Salva il punteggio pulendo prima il vecchio record
             supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
             
             supabase_client.table("risultati").insert({
@@ -70,7 +74,7 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 "punteggio": punti_ottenuti
             }).execute()
             
-            report.append(f"Squadra ID {s['squadra_id']}: {punti_ottenuti}/{totale_eventi_letti} punti corretti (Letti: {pronostici_letti})")
+            report.append(f"Squadra ID {s['squadra_id']}: {punti_ottenuti}/{totale_eventi_letti} punti (Letti: {pronostici_letti})")
         
         return True, "\n".join(report)
         
@@ -78,5 +82,6 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
         return False, f"Errore generale nel bot: {str(e)}"
 
 def ottieni_risultati_reali_giornata(giornata):
-    # Inserisci qui i risultati reali di riscontro per i test (es. 4 risultati se la schedina di test ne ha 4)
+    # Risultati reali di riscontro per i test (4 elementi per i tuoi test attuali)
     return ['1', 'X', '2', '1']
+    
