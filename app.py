@@ -8,6 +8,9 @@ SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Nome del bucket di Supabase Storage per le immagini
+BUCKET_NAME = "fantabet"
+
 # 2. Configurazione Pagina
 st.set_page_config(page_title="FantaBet Serie A", page_icon="⚽", layout="wide")
 
@@ -74,11 +77,25 @@ with st.sidebar:
         with tab1:
             with st.form("add_s"):
                 n = st.text_input("Nome Squadra")
-                logo = st.text_input("URL Logo")
+                logo_file = st.file_uploader("Carica Logo Squadra", type=["png", "jpg", "jpeg"])
+                
                 if st.form_submit_button("Salva"): 
                     if n:
-                        supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo}).execute()
-                        st.success("Squadra salvata!")
+                        logo_url = ""
+                        if logo_file is not None:
+                            try:
+                                file_path = f"loghi/{datetime.now().timestamp()}_{logo_file.name}"
+                                supabase.storage.from_(BUCKET_NAME).upload(
+                                    path=file_path,
+                                    file=logo_file.getvalue(),
+                                    file_options={"content-type": logo_file.type, "upsert": "true"}
+                                )
+                                logo_url = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                            except Exception as e:
+                                st.error(f"Errore caricamento logo: {e}")
+                        
+                        supabase.table("squadre").insert({"nome_squadra": n, "logo_url": logo_url}).execute()
+                        st.success("Squadra salvata con successo!")
                         st.rerun()
                     else:
                         st.warning("Inserisci il nome della squadra.")
@@ -128,20 +145,31 @@ with st.sidebar:
                     g = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_multi")
                     num_g_sch = int(g.split()[1])
                     
-                    schedine_inserite = {}
+                    schedine_file_inserite = {}
                     for s in sorted(squadre_list, key=lambda x: x['nome_squadra']):
-                        schedine_inserite[s['id']] = st.text_input(f"URL Schedina - {s['nome_squadra']}", key=f"sch_{s['id']}")
+                        schedine_file_inserite[s['id']] = st.file_uploader(f"Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"sch_file_{s['id']}")
                     
                     if st.form_submit_button("Carica Schedine"):
-                        for s_id, url in schedine_inserite.items():
-                            if url and url.startswith("http"):
-                                supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
-                                supabase.table("schedine").insert({
-                                    "squadra_id": s_id, 
-                                    "giornata": num_g_sch, 
-                                    "schedina_url": url
-                                }).execute()
-                        st.success("Schedine caricate!")
+                        for s_id, file_obj in schedine_file_inserite.items():
+                            if file_obj is not None:
+                                try:
+                                    file_path = f"schedine/g{num_g_sch}_{datetime.now().timestamp()}_{file_obj.name}"
+                                    supabase.storage.from_(BUCKET_NAME).upload(
+                                        path=file_path,
+                                        file=file_obj.getvalue(),
+                                        file_options={"content-type": file_obj.type, "upsert": "true"}
+                                    )
+                                    url = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                                    
+                                    supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
+                                    supabase.table("schedine").insert({
+                                        "squadra_id": s_id, 
+                                        "giornata": num_g_sch, 
+                                        "schedina_url": url
+                                    }).execute()
+                                except Exception as e:
+                                    st.error(f"Errore caricamento schedina squadra ID {s_id}: {e}")
+                        st.success("Schedine caricate con successo!")
                         st.rerun()
             else:
                 st.info("Aggiungi prima almeno una squadra.")
@@ -183,7 +211,7 @@ with st.sidebar:
 # --- MENU E LOGICA PAGINE ---
 st.title("⚽ FantaBet Serie A")
 
-# Promemoria Schedine Dinamico (Punto 3)
+# Promemoria Schedine Dinamico
 g_corrente = get_giornata_corrente()
 st.markdown(f"""
     <div class="alert-box">
@@ -207,20 +235,17 @@ except Exception as e:
     squadre, risultati = [], []
     st.error(f"Errore di connessione al database: {e}")
 
-# Funzione d'appoggio per calcolare la classifica di una determinata soglia di giornate (con storico)
+# Funzione d'appoggio per calcolare la classifica
 def calcola_classifica(giornate_target=None):
     if not squadre: return []
     
     classifica_temp = []
     for s in squadre:
-        # Filtra i risultati in base alle giornate target (es. totale o coppe)
         res_squadra = [r for r in risultati if r['squadra_id'] == s['id']]
         if giornate_target:
             res_squadra = [r for r in res_squadra if r.get('giornata') is not None and giornate_target[0] <= int(r['giornata']) <= giornate_target[1]]
         
         punti_totali = sum(int(r['punteggio']) for r in res_squadra)
-        
-        # Mappa dettagliata giornata per giornata per lo storico (Punto 1)
         dettaglio_giornate = {int(r['giornata']): int(r['punteggio']) for r in res_squadra if r.get('giornata') is not None}
         
         classifica_temp.append({
@@ -231,7 +256,6 @@ def calcola_classifica(giornate_target=None):
             'dettaglio': dettaglio_giornate
         })
     
-    # Ordinamento: Prima per punti decrescenti, poi alfabeticamente
     return sorted(classifica_temp, key=lambda x: (-x['punti'], x['nome']))
 
 # --- CLASSIFICA GENERALE ---
@@ -239,17 +263,6 @@ if st.session_state.current_page == "Classifica":
     if squadre:
         classifica = calcola_classifica()
         
-        # Funzione opzionale per simulare o calcolare i badge di movimento (Punto 5)
-        # Confrontiamo la classifica attuale con quella escludendo l'ultima giornata registrata per determinare il trend
-        giornate_registrate = sorted(list({r.get('giornata') for r in risultati if r.get('giornata') is not None}))
-        trend_dict = {}
-        if len(giornate_registrate) > 1:
-            ultima_g = giornate_registrate[-1]
-            # Classifica precedente all'ultima giornata
-            classifica_prec = calcola_classifica() # Semplificazione logica trend basata su variazioni recenti o fissa a freccia neutra se preferisci
-            # Per semplicità visiva inseriamo un indicatore dinamico basato sui dati o neutro
-        
-        # Esportazione CSV (Punto 4)
         if st.session_state.admin and classifica:
             df_export = pd.DataFrame([{'Squadra': item['nome'], 'Punti Totali': item['punti']} for item in classifica])
             csv_data = df_export.to_csv(index=False).encode('utf-8')
@@ -264,7 +277,7 @@ if st.session_state.current_page == "Classifica":
         if 38 in giornate_registrate_set and len(classifica) >= 3:
             st.markdown("<div class='winner-card'><h2>🏆 PODIO FINALE 🏆</h2></div>", unsafe_allow_html=True)
             col1, col2, col3 = st.columns(3)
-            podio = [col2, col1, col3] # 1°, 2°, 3°
+            podio = [col2, col1, col3]
             for i in range(3):
                 with podio[i]:
                     logo_p = f"<img src='{classifica[i]['logo']}' style='width:50px; height:50px; border-radius:50%; object-fit:cover; margin-bottom:5px;' /><br>" if classifica[i]['logo'] else ""
@@ -273,12 +286,10 @@ if st.session_state.current_page == "Classifica":
                         st.markdown(logo_p, unsafe_allow_html=True)
                     st.write(f"**{classifica[i]['punti']} Punti**")
         
-        # Visualizzazione Classifica con Storico Espandibile (Punto 1) e Badge (Punto 5)
         for pos, item in enumerate(classifica, 1):
             c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else ""
             logo_html = f"<img src='{item['logo']}' style='width:30px; height:30px; border-radius:50%; object-fit:cover; margin-right:10px;' />" if item['logo'] else "⚽ "
             
-            # Creazione di una card espandibile per vedere lo storico dei punteggi (Punto 1)
             with st.container():
                 st.markdown(f"""<div class="card {c_class}"><div style="display:flex; align-items:center;">
                             <span style="font-weight:bold; width:35px;">{pos}°</span>
@@ -286,7 +297,6 @@ if st.session_state.current_page == "Classifica":
                             <span style="flex-grow:1; margin-left:5px; font-weight:bold;">{item['nome']}</span>
                             <span style="font-weight:bold; color:#4CAF50;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
                 
-                # Espandibile per lo storico giornate
                 with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
                         df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
