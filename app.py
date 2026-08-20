@@ -1,5 +1,6 @@
 import streamlit as st
 from supabase import create_client
+from datetime import datetime
 
 # 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
@@ -18,6 +19,18 @@ st.markdown("""
     .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 25px; box-shadow: 0px 0px 20px rgba(255, 215, 0, 0.4); }
     </style>
 """, unsafe_allow_html=True)
+
+# Funzione per stimare la giornata corrente in base alla data
+def get_giornata_corrente():
+    oggi = datetime.now().date()
+    inizio_campionato = datetime(2026, 8, 23).date() # Data d'inizio stimata della Serie A
+    if oggi < inizio_campionato:
+        return 1
+    giorni_trascorsi = (oggi - inizio_campionato).days
+    giornata_stimata = (giorni_trascorsi // 7) + 1
+    return max(1, min(38, giornata_stimata))
+
+giornata_predefinita_idx = get_giornata_corrente() - 1
 
 # Gestione stato navigazione
 if "current_page" not in st.session_state: st.session_state.current_page = "Classifica"
@@ -50,7 +63,7 @@ with st.sidebar:
             st.write("### Inserisci Punti Giornata")
             if squadre_list:
                 with st.form("add_p_multi"):
-                    g_pts = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_pts_multi")
+                    g_pts = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_predefinita_idx, key="g_pts_multi")
                     num_g_pts = int(g_pts.split()[1])
                     
                     punti_inseriti = {}
@@ -59,9 +72,8 @@ with st.sidebar:
                     
                     if st.form_submit_button("Salva Tutti i Punti"):
                         for s_id, p in punti_inseriti.items():
-                            # Rimuoviamo eventuali punti precedenti per quella giornata e squadra per evitare duplicati
                             supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
-                            if p >= 0: # Salviamo anche lo zero se l'utente lo inserisce esplicitamente
+                            if p >= 0:
                                 supabase.table("risultati").insert({
                                     "squadra_id": s_id, 
                                     "punteggio": p, 
@@ -73,7 +85,7 @@ with st.sidebar:
                 st.markdown("---")
                 st.write("### Azzera Punti Squadra")
                 with st.form("reset_p_single"):
-                    g_reset = st.selectbox("Giornata da azzerare", [f"Giornata {i}" for i in range(1, 39)], key="g_reset_pts")
+                    g_reset = st.selectbox("Giornata da azzerare", [f"Giornata {i}" for i in range(1, 39)], index=giornata_predefinita_idx, key="g_reset_pts")
                     num_g_reset = int(g_reset.split()[1])
                     sq_reset = st.selectbox("Squadra", [s['nome_squadra'] for s in sorted(squadre_list, key=lambda x: x['nome_squadra'])], key="sq_reset_pts")
                     
@@ -89,7 +101,7 @@ with st.sidebar:
             st.write("### Carica Schedine Giornata")
             if squadre_list:
                 with st.form("add_sch_multi"):
-                    g = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_sch_multi")
+                    g = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_predefinita_idx, key="g_sch_multi")
                     num_g_sch = int(g.split()[1])
                     
                     schedine_inserite = {}
@@ -112,7 +124,7 @@ with st.sidebar:
                         
         with tab4:
             st.write("### Elimina Schedina")
-            g_del = st.selectbox("Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_del_sch")
+            g_del = st.selectbox("Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_predefinita_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
             schedine_g = supabase.table("schedine").select("squadra_id").eq("giornata", num_g_del).execute().data
             squadre_con_schedina = [s for s in squadre_list if s['id'] in [sch['squadra_id'] for sch in schedine_g]] if squadre_list else []
@@ -174,7 +186,7 @@ if st.session_state.current_page == "Classifica":
 # --- PAGINA SCHEDINE ---
 elif st.session_state.current_page == "Schedine":
     st.title("📅 Schedine")
-    giornata = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], key="g_view_sch")
+    giornata = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_predefinita_idx, key="g_view_sch")
     num_g = int(giornata.split(" ")[1])
     squadre = supabase.table("squadre").select("*").execute().data
     schedine = supabase.table("schedine").select("*").eq("giornata", num_g).execute().data
@@ -207,11 +219,11 @@ elif st.session_state.current_page == "Coppa Inverno":
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
         giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
-        torneo_concluso = any(g >= 18 for g in giornate_inserite)
+        torneo_concluso = 17 in giornate_inserite
         
         if torneo_concluso and classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
             vincitore = classifica_ordinata[0]
-            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:90px; height:90px; border-radius:50%; object-fit:cover; border: 3px solid #FFD700; margin-bottom: 10px;' />" if vincitore['logo'] else "🏆"
+            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:120px; height:120px; border-radius:50%; object-fit:cover; border: 4px solid #FFD700; margin-bottom: 12px;' />" if vincitore['logo'] else "🏆"
             st.markdown(f"""
                 <div class="winner-card">
                     <h2 style="color: #FFD700 !important; margin-bottom: 15px;">🏆 Vincitore Coppa Inverno 🏆</h2>
@@ -249,11 +261,11 @@ elif st.session_state.current_page == "Coppa Primavera":
         classifica_ordinata = sorted(classifica_coppa, key=lambda x: (-x['punti'], x['nome']))
         
         giornate_inserite = [int(r['giornata']) for r in risultati if r.get('giornata') is not None]
-        torneo_concluso = any(g >= 33 for g in giornate_inserite)
+        torneo_concluso = 32 in giornate_inserite
         
         if torneo_concluso and classifica_ordinata and classifica_ordinata[0]['punti'] > 0:
             vincitore = classifica_ordinata[0]
-            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:90px; height:90px; border-radius:50%; object-fit:cover; border: 3px solid #FFD700; margin-bottom: 10px;' />" if vincitore['logo'] else "🏆"
+            logo_vincitore = f"<img src='{vincitore['logo']}' style='width:120px; height:120px; border-radius:50%; object-fit:cover; border: 4px solid #FFD700; margin-bottom: 12px;' />" if vincitore['logo'] else "🏆"
             st.markdown(f"""
                 <div class="winner-card">
                     <h2 style="color: #FFD700 !important; margin-bottom: 15px;">🏆 Vincitore Coppa Primavera 🏆</h2>
