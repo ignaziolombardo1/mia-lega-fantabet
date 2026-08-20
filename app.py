@@ -11,7 +11,6 @@ import google.generativeai as genai
 # CONFIGURAZIONE INIZIALE E CREDENZIALI (SICURA)
 # =========================================================
 
-# Legge chiavi e URL direttamente dai segreti protetti di Streamlit
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
@@ -100,7 +99,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E BOT IA (GEMINI)
+# FUNZIONI DI SUPPORTO E BOT IA (GEMINI AGGIORNATO)
 # =========================================================
 
 def get_giornata_corrente():
@@ -141,7 +140,7 @@ def analizza_schedine_ia(giornata, supabase_client):
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto.", {}
             
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-3.6-flash')
         report = []
         dati_punti_esatti = {}
 
