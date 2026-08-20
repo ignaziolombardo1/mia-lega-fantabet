@@ -12,6 +12,8 @@ from openai import OpenAI
 
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
 SUPABASE_KEY = "sb_publishable_OCL6sqOZDuP_2nONpV8mXg_szn04DQT"
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+BUCKET_NAME = "fantabet"
 
 st.set_page_config(page_title="FantaBet Serie A Pro", page_icon="⚽", layout="wide")
 
@@ -38,26 +40,66 @@ st.markdown("""
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    
+    /* Stile per la schermata di caricamento iniziale (Splash Screen) */
+    .splash-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #0E1117;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 99999;
+        animation: fadeOut 0.5s ease-in-out 1.2s forwards;
+    }
+    @keyframes fadeOut {
+        to { opacity: 0; visibility: hidden; }
+    }
+    .pulse-logo {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #4CAF50;
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(76, 175, 80, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Inizializzazione sicura del client Supabase
-@st.cache_resource
-init_supabase():
-    try:
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        return None
+# =========================================================
+# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE CON IL TUO LOGO
+# =========================================================
 
-supabase = init_supabase()
-BUCKET_NAME = "fantabet"
+if "app_loaded" not in st.session_state:
+    st.session_state.app_loaded = False
 
-if not supabase:
-    st.error("Errore critico: Impossibile connettersi a Supabase. Verifica le credenziali.")
-    st.stop()
+if not st.session_state.app_loaded:
+    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
+    
+    st.markdown(f"""
+        <div class="splash-screen">
+            <img src="{logo_splash_url}" class="pulse-logo" />
+            <h2 style="color: #FAFAFA; margin-top: 20px; font-family: sans-serif;">FantaBet Serie A Pro</h2>
+            <p style="color: #888; font-size: 0.9em;">Caricamento in corso...</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    time.sleep(1.2)
+    st.session_state.app_loaded = True
+    st.rerun()
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E CARICAMENTO PROTETTO
+# FUNZIONI DI SUPPORTO E LOGICA DEL BOT
 # =========================================================
 
 def get_giornata_corrente():
@@ -73,26 +115,20 @@ if "current_page" not in st.session_state:
 if "admin" not in st.session_state:
     st.session_state.admin = False
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=30)
 def carica_dati_db():
     try:
-        res_sq = supabase.table("squadre").select("*").execute()
-        sq = sorted(res_sq.data or [], key=lambda x: x['nome_squadra']) if res_sq and res_sq.data else []
-        
-        res_res = supabase.table("risultati").select("*").execute()
-        res = res_res.data or [] if res_res else []
-        
+        sq = sorted(supabase.table("squadre").select("*").execute().data or [], key=lambda x: x['nome_squadra'])
+        res = supabase.table("risultati").select("*").execute().data or []
         return sq, res
     except Exception as e:
-        st.warning(f"Avviso di connessione al database: {e}")
         return [], []
 
-# Caricamento dati con fallback per evitare blocchi totali
 squadre, risultati = carica_dati_db()
 
 try:
     risultati_globali = supabase.table("risultati").select("giornata").execute().data or []
-    giornate_completate = set(r['giornata'] for r in risultati_globali if r and r.get('giornata'))
+    giornate_completate = set(r['giornata'] for r in risultati_globali if r.get('giornata'))
 except Exception:
     giornate_completate = set()
 
@@ -129,7 +165,12 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 
                 response = client.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt_testo}],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt_testo
+                        }
+                    ],
                     max_tokens=200
                 )
                 
@@ -151,6 +192,7 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                     punti_ottenuti += 1
             
             supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
+            
             supabase_client.table("risultati").insert({
                 "squadra_id": s['squadra_id'], 
                 "giornata": giornata, 
@@ -173,8 +215,7 @@ with st.sidebar:
     if not st.session_state.admin:
         pwd = st.text_input("Password Admin", type="password")
         if st.button("Autenticati"):
-            admin_pwd_correct = st.secrets.get("ADMIN_PASSWORD", "admin123") if "ADMIN_PASSWORD" in st.secrets else "admin123"
-            if pwd == admin_pwd_correct: 
+            if pwd == st.secrets.get("ADMIN_PASSWORD", "admin123"): 
                 st.session_state.admin = True
                 st.toast("Accesso effettuato con successo!", icon="🔓")
                 time.sleep(0.6)
