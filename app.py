@@ -42,6 +42,7 @@ st.markdown("""
     .bronze { border-left: 5px solid #CD7F32 !important; background: rgba(205, 127, 50, 0.1) !important; }
     .winner-card { background: rgba(20, 20, 20, 0.95); border: 2px solid #FFD700; padding: 30px; border-radius: 20px; text-align: center; margin: 25px 0; box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
+    .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -96,7 +97,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Bot API", "🎫 Schedina", "⚽ Punti", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Bot API", "🎫 Schedine", "⚽ Punti", "🗑️ Elimina"])
         
         with tab1:
             with st.form("add_s"):
@@ -141,54 +142,57 @@ with st.sidebar:
                         st.error(messaggio)
 
         with tab3:
-            st.write("### 🎫 Carica Foto Schedina")
-            st.caption("Carica lo screenshot da Milleniumbet e imposta i pronostici associati.")
+            st.write("### 🎫 Carica Schedine in Blocco")
+            st.caption("Seleziona la giornata e carica le foto per tutte le squadre comodamente insieme.")
+            
             if squadre:
-                g_sch = st.selectbox("Giornata Schedina", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto")
+                g_sch = st.selectbox("Seleziona Giornata di Riferimento", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
-                sq_scelta_sch = st.selectbox("Seleziona Squadra", [s['nome_squadra'] for s in squadre], key="sq_sch_foto")
-                s_id_scelta = next(s['id'] for s in squadre if s['nome_squadra'] == sq_scelta_sch)
+                st.markdown("---")
                 
-                file_foto = st.file_uploader("Screenshot Schedina", type=["png", "jpg", "jpeg"], key="file_foto_sch")
+                # Dizionario per raccogliere i file caricati per ogni squadra
+                dati_caricamento = {}
                 
-                st.write("Pronostici chiave della giornata:")
-                col_p1, col_p2 = st.columns(2)
-                p1 = col_p1.selectbox("Inter - Milan", ["1", "X", "2"], key="p_im")
-                p2 = col_p2.selectbox("Juventus - Napoli", ["1", "X", "2"], key="p_jn")
+                for s in squadre:
+                    st.markdown(f"<div class='schedina-box'><b>⚽ {s['nome_squadra']}</b>", unsafe_allow_html=True)
+                    f_foto = st.file_uploader(f"Screenshot Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"foto_{s['id']}")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                    dati_caricamento[s['id']] = f_foto
                 
-                if st.button("Salva Schedina e Pronostici"):
-                    if file_foto is not None:
-                        try:
-                            file_path = f"schedine/g{num_g_sch}_{s_id_scelta}_{datetime.now().timestamp()}.png"
-                            supabase.storage.from_(BUCKET_NAME).upload(
-                                path=file_path, file=file_foto.getvalue(),
-                                file_options={"content-type": file_foto.type, "upsert": "true"}
-                            )
-                            url_img = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
-                            
-                            pronostici_dict = {
-                                "Inter - Milan": p1,
-                                "Juventus - Napoli": p2
-                            }
-                            
-                            supabase.table("schedine").delete().eq("squadra_id", s_id_scelta).eq("giornata", num_g_sch).execute()
-                            supabase.table("schedine").insert({
-                                "squadra_id": s_id_scelta,
-                                "giornata": num_g_sch,
-                                "schedina_url": url_img,
-                                "pronostici_json": pronostici_dict
-                            }).execute()
-                            
-                            st.success("Schedina archiviata con successo!")
-                            time.sleep(1.2)
+                if st.button("💾 Salva Tutte le Schedine Caricate", type="primary"):
+                    with st.spinner("Caricamento in corso su Supabase..."):
+                        caricate = 0
+                        for s_id, file_foto in dati_caricamento.items():
+                            if file_foto is not None:
+                                try:
+                                    file_path = f"schedine/g{num_g_sch}_{s_id}_{datetime.now().timestamp()}.png"
+                                    supabase.storage.from_(BUCKET_NAME).upload(
+                                        path=file_path, file=file_foto.getvalue(),
+                                        file_options={"content-type": file_foto.type, "upsert": "true"}
+                                    )
+                                    url_img = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                                    
+                                    supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
+                                    supabase.table("schedine").insert({
+                                        "squadra_id": s_id,
+                                        "giornata": num_g_sch,
+                                        "schedina_url": url_img,
+                                        "pronostici_json": {}
+                                    }).execute()
+                                    caricate += 1
+                                except Exception as e:
+                                    st.error(f"Errore per la squadra ID {s_id}: {e}")
+                        
+                        if caricate > 0:
+                            st.success(f"Salvate con successo {caricate} schedine!")
+                            time.sleep(1.5)
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Errore di salvataggio: {e}")
-                    else:
-                        st.warning("Carica prima l'immagine della schedina.")
+                        else:
+                            st.warning("Nessuna foto caricata. Assicurati di aver allegato almeno uno screenshot.")
             else:
-                st.info("Nessuna squadra disponibile.")
+                st.info("Nessuna squadra disponibile. Aggiungine prima una.")
                     
         with tab4:
             st.write("### Inserisci Punti Manuali")
