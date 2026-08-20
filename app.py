@@ -3,7 +3,6 @@ from supabase import create_client
 from datetime import datetime
 import pandas as pd
 import time
-import plotly.express as px
 
 # Prova a importare la logica del bot se presente
 try:
@@ -133,15 +132,22 @@ with st.sidebar:
             g_auto = st.selectbox("Giornata da Verificare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
             
-            if st.button("Avvia Bot e Aggiorna"):
+            if st.button("Avvia Analisi e Mostra Report"):
                 with st.spinner("Elaborazione risultati in corso..."):
                     successo, messaggio = calcola_risultati_da_foto_o_dati(num_g_auto, supabase)
                     if successo:
-                        st.toast(messaggio, icon="🤖")
-                        time.sleep(1.0)
-                        st.rerun()
+                        st.success("Analisi completata!")
+                        st.text_area("Log di lettura del Bot:", value=messaggio, height=150)
                     else:
                         st.error(messaggio)
+            
+            if st.checkbox("Mostra anteprima dati salvati nel DB"):
+                dati_db = supabase.table("risultati").select("*").eq("giornata", num_g_auto).execute().data
+                if dati_db:
+                    df_debug = pd.DataFrame(dati_db)
+                    st.dataframe(df_debug, use_container_width=True)
+                else:
+                    st.warning("Nessun dato trovato nel database per questa giornata.")
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
@@ -336,16 +342,10 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
             if not is_coppa:
-                with st.expander(f"📊 Dettaglio e Trend - {item['nome']}"):
+                with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
-                        col_tab, col_graf = st.columns([1, 1.2])
-                        with col_tab:
-                            df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
-                            st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
-                        with col_graf:
-                            fig = px.line(df_dettaglio, x='Giornata', y='Punti', markers=True, title=f"Trend Punti - {item['nome']}")
-                            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#FAFAFA', margin=dict(l=10, r=10, t=30, b=10))
-                            st.plotly_chart(fig, use_container_width=True)
+                        df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
+                        st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
                     else:
                         st.info("Nessun punteggio registrato per questa squadra.")
     else:
@@ -361,7 +361,6 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            # Griglia a 3 colonne per le schedine
             cols = st.columns(3)
             for idx, s in enumerate(squadre):
                 with cols[idx % 3]:
