@@ -89,7 +89,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "📅 Partite", "⚽ Punti", "🎫 Schedine", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedine", "🗑️ Elimina"])
         
         with tab1:
             with st.form("add_s"):
@@ -118,27 +118,6 @@ with st.sidebar:
                         st.warning("Inserisci il nome della squadra.")
 
         with tab2:
-            st.write("### Imposta Partite Giornata")
-            with st.form("form_partite"):
-                g_part = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_part_sel")
-                num_g_part = int(g_part.split()[1])
-                
-                st.info("Inserisci le 10 partite della giornata (una per riga o nei campi sottostanti):")
-                partite_input = []
-                for i in range(1, 11):
-                    p = st.text_input(f"Partita {i}", key=f"p_input_{i}")
-                    if p.strip():
-                        partite_input.append(p.strip())
-                
-                if st.form_submit_button("Salva Tutte e 10 le Partite"):
-                    supabase.table("partite_giornata").delete().eq("giornata", num_g_part).execute()
-                    for p in partite_input:
-                        supabase.table("partite_giornata").insert({"giornata": num_g_part, "partita": p}).execute()
-                    st.success(f"Salvate {len(partite_input)} partite per la Giornata {num_g_part}!")
-                    time.sleep(1.5)
-                    st.rerun()
-
-        with tab3:
             st.write("### Inserisci Punti Giornata")
             if squadre:
                 with st.form("add_p_multi"):
@@ -158,26 +137,39 @@ with st.sidebar:
             else:
                 st.info("Aggiungi prima almeno una squadra.")
                 
-        with tab4:
-            st.write("### Genera Schedina Automatica")
+        with tab3:
+            st.write("### Genera da Codice Schedina")
             if squadre:
                 g_sch_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_auto")
                 num_g_sch = int(g_sch_auto.split()[1])
                 
-                res_partite = supabase.table("partite_giornata").select("partita").eq("giornata", num_g_sch).execute().data
-                partite_giornata = [item['partita'] for item in res_partite] if res_partite else []
+                sq_scelta_sch = st.selectbox("Seleziona Squadra", [s['nome_squadra'] for s in squadre], key="sq_sch_auto")
+                s_id_scelta = next(s['id'] for s in squadre if s['nome_squadra'] == sq_scelta_sch)
                 
-                if partite_giornata:
-                    sq_scelta_sch = st.selectbox("Seleziona Squadra", [s['nome_squadra'] for s in squadre], key="sq_sch_auto")
-                    s_id_scelta = next(s['id'] for s in squadre if s['nome_squadra'] == sq_scelta_sch)
-                    
-                    with st.form("form_genera_schedina"):
-                        pronostici_correnti = {}
-                        for p in partite_giornata:
-                            pronostici_correnti[p] = st.selectbox(f"Pronostico: {p}", ["1", "X", "2"], key=f"pron_{p}")
+                codice_schedina = st.text_input("Inserisci Codice Schedina (es. 82ii)")
+                
+                if st.button("Genera Schedina da Codice"):
+                    if codice_schedina.strip():
+                        # Archivio codici / bot di decodifica delle 10 partite
+                        archivio_codici_esempio = {
+                            "82ii": {
+                                "Inter - Milan": "1",
+                                "Juventus - Napoli": "X",
+                                "Roma - Lazio": "2",
+                                "Atalanta - Fiorentina": "1",
+                                "Bologna - Torino": "X",
+                                "Cagliari - Empoli": "1",
+                                "Genoa - Verona": "2",
+                                "Lecce - Parma": "X",
+                                "Monza - Udinese": "1",
+                                "Como - Venezia": "2"
+                            }
+                        }
                         
-                        if st.form_submit_button("Crea e Carica Schedina"):
-                            img_bytes = crea_immagine_schedina(sq_scelta_sch, num_g_sch, pronostici_correnti)
+                        pronostici_estratti = archivio_codici_esempio.get(codice_schedina.strip().lower())
+                        
+                        if pronostici_estratti:
+                            img_bytes = crea_immagine_schedina(sq_scelta_sch, num_g_sch, pronostici_estratti)
                             
                             file_path = f"schedine/g{num_g_sch}_{s_id_scelta}_{datetime.now().timestamp()}.png"
                             supabase.storage.from_(BUCKET_NAME).upload(
@@ -191,18 +183,20 @@ with st.sidebar:
                                 "squadra_id": s_id_scelta,
                                 "giornata": num_g_sch,
                                 "schedina_url": url_img,
-                                "pronostici_json": pronostici_correnti
+                                "pronostici_json": pronostici_estratti
                             }).execute()
                             
-                            st.success("Schedina generata e salvata con successo!")
+                            st.success(f"Schedina generata con successo dal codice '{codice_schedina}'!")
                             time.sleep(1.5)
                             st.rerun()
-                else:
-                    st.warning("Prima inserisci le 10 partite per questa giornata nella tab 'Partite'!")
+                        else:
+                            st.error("Codice schedina non riconosciuto nel sistema!")
+                    else:
+                        st.warning("Inserisci un codice valido.")
             else:
                 st.info("Aggiungi prima almeno una squadra.")
                     
-        with tab5:
+        with tab4:
             st.write("### Elimina Schedina o Squadra")
             g_del = st.selectbox("Giornata Schedina", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
