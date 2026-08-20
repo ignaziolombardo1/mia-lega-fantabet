@@ -40,8 +40,63 @@ st.markdown("""
     .alert-box { background: rgba(33, 150, 243, 0.15); border-left: 5px solid #2196F3; padding: 14px; border-radius: 10px; margin-bottom: 25px; color: #fff; backdrop-filter: blur(5px); }
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+    
+    /* Stile per la schermata di caricamento iniziale (Splash Screen) */
+    .splash-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #0E1117;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 99999;
+        animation: fadeOut 0.5s ease-in-out 1.2s forwards;
+    }
+    @keyframes fadeOut {
+        to { opacity: 0; visibility: hidden; }
+    }
+    .pulse-logo {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #4CAF50;
+        box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(76, 175, 80, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
+    }
     </style>
 """, unsafe_allow_html=True)
+
+# =========================================================
+# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE
+# =========================================================
+
+if "app_loaded" not in st.session_state:
+    st.session_state.app_loaded = False
+
+if not st.session_state.app_loaded:
+    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"
+    
+    st.markdown(f"""
+        <div class="splash-screen">
+            <img src="{logo_splash_url}" class="pulse-logo" />
+            <h2 style="color: #FAFAFA; margin-top: 20px; font-family: sans-serif;">FantaBet Serie A Pro</h2>
+            <p style="color: #888; font-size: 0.9em;">Caricamento in corso...</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    time.sleep(1.2)
+    st.session_state.app_loaded = True
+    st.rerun()
 
 # =========================================================
 # FUNZIONI DI SUPPORTO E LOGICA DEL BOT
@@ -456,7 +511,6 @@ elif st.session_state.current_page == "Schedine":
         schedine_dict = {sch['squadra_id']: sch['schedina_url'] for sch in schedine}
         
         if squadre:
-            # Ordinamento rigorosamente alfabetico sequenziale (ottimizzato e perfetto sia su PC che su smartphone)
             squadre_ordinate = sorted(squadre, key=lambda x: x['nome_squadra'])
             
             for s in squadre_ordinate:
