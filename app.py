@@ -3,8 +3,14 @@ from supabase import create_client
 from datetime import datetime
 import pandas as pd
 import time
-from generatore import crea_immagine_schedina
-from bot_logica import calcola_risultati_giornata
+
+# Importa il generatore grafico delle schedine (assicurati di avere generatore.py nella stessa cartella)
+try:
+    from generatore import crea_immagine_schedina
+except ImportError:
+    # Fallback se il file generatore.py non è ancora presente
+    def crea_immagine_schedina(nome_squadra, giornata, pronostici_dict):
+        return None
 
 # 1. Configurazione Supabase
 SUPABASE_URL = "https://rkomejsxqfvdhnyxzqkt.supabase.co"
@@ -90,7 +96,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4 = st.tabs(["➕ Squadra", "⚽ Punti / API", "🎫 Schedine", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "⚽ Punti", "🎫 Schedina", "⚡ Codice Schedina", "🗑️ Elimina"])
         
         with tab1:
             with st.form("add_s"):
@@ -117,35 +123,77 @@ with st.sidebar:
                         st.rerun()
                     else:
                         st.warning("Inserisci il nome della squadra.")
-
+                    
         with tab2:
-            st.write("### Aggiornamento Automatico (API)")
-            g_auto = st.selectbox("Seleziona Giornata da Verificare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
-            num_g_auto = int(g_auto.split()[1])
-            
-            if st.button("Verifica Risultati e Aggiorna Classifica"):
-                with st.spinner("Connessione all'API in corso..."):
-                    successo, messaggio = calcola_risultati_giornata(num_g_auto, supabase)
-                    if successo:
-                        st.success(messaggio)
+            st.write("### Inserisci Punti Giornata")
+            if squadre:
+                with st.form("add_p_multi"):
+                    g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
+                    num_g_pts = int(g_pts.split()[1])
+                    
+                    punti_inseriti = {s['id']: st.number_input(f"{s['nome_squadra']}", min_value=0, step=1, key=f"pts_{s['id']}") for s in squadre}
+                    
+                    if st.form_submit_button("Salva Tutti i Punti"):
+                        for s_id, p in punti_inseriti.items():
+                            supabase.table("risultati").delete().eq("squadra_id", s_id).eq("giornata", num_g_pts).execute()
+                            if p >= 0:
+                                supabase.table("risultati").insert({"squadra_id": s_id, "punteggio": p, "giornata": num_g_pts}).execute()
+                        st.success("Punti aggiornati!")
                         time.sleep(1.5)
                         st.rerun()
-                    else:
-                        st.error(f"Errore: {messaggio}")
-
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+                
         with tab3:
-            st.write("### Genera da Codice Schedina")
+            st.write("### Carica Schedine (Immagine)")
+            if squadre:
+                with st.form("add_sch_multi"):
+                    g = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_multi")
+                    num_g_sch = int(g.split()[1])
+                    
+                    schedine_file_inserite = {s['id']: st.file_uploader(f"Schedina - {s['nome_squadra']}", type=["png", "jpg", "jpeg"], key=f"sch_file_{s['id']}") for s in squadre}
+                    
+                    if st.form_submit_button("Carica Schedine"):
+                        caricamenti = 0
+                        for s_id, file_obj in schedine_file_inserite.items():
+                            if file_obj is not None:
+                                try:
+                                    file_path = f"schedine/g{num_g_sch}_{datetime.now().timestamp()}_{file_obj.name}"
+                                    supabase.storage.from_(BUCKET_NAME).upload(
+                                        path=file_path, file=file_obj.getvalue(),
+                                        file_options={"content-type": file_obj.type, "upsert": "true"}
+                                    )
+                                    url = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                                    supabase.table("schedine").delete().eq("squadra_id", s_id).eq("giornata", num_g_sch).execute()
+                                    supabase.table("schedine").insert({"squadra_id": s_id, "giornata": num_g_sch, "schedina_url": url}).execute()
+                                    caricamenti += 1
+                                except Exception as e:
+                                    st.error(f"Errore: {e}")
+                        
+                        if caricamenti > 0:
+                            st.success(f"Caricate {caricamenti} schedine!")
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.warning("Seleziona almeno un file.")
+            else:
+                st.info("Aggiungi prima almeno una squadra.")
+
+        with tab4:
+            st.write("### Genera Schedina da Codice")
+            st.caption("Genera automaticamente l'immagine della schedina inserendo un codice di riferimento.")
             if squadre:
                 g_sch_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_auto")
-                num_g_sch = int(g_sch_auto.split()[1])
+                num_g_sch_auto = int(g_sch_auto.split()[1])
                 
                 sq_scelta_sch = st.selectbox("Seleziona Squadra", [s['nome_squadra'] for s in squadre], key="sq_sch_auto")
                 s_id_scelta = next(s['id'] for s in squadre if s['nome_squadra'] == sq_scelta_sch)
                 
                 codice_schedina = st.text_input("Inserisci Codice Schedina (es. 82ii)")
                 
-                if st.button("Genera Schedina da Codice"):
+                if st.button("Genera e Pubblica Schedina"):
                     if codice_schedina.strip():
+                        # Archivio di esempio collegato ai codici schedina
                         archivio_codici_esempio = {
                             "82ii": {
                                 "Inter - Milan": "1",
@@ -164,35 +212,37 @@ with st.sidebar:
                         pronostici_estratti = archivio_codici_esempio.get(codice_schedina.strip().lower())
                         
                         if pronostici_estratti:
-                            img_bytes = crea_immagine_schedina(sq_scelta_sch, num_g_sch, pronostici_estratti)
-                            
-                            file_path = f"schedine/g{num_g_sch}_{s_id_scelta}_{datetime.now().timestamp()}.png"
-                            supabase.storage.from_(BUCKET_NAME).upload(
-                                path=file_path, file=img_bytes,
-                                file_options={"content-type": "image/png", "upsert": "true"}
-                            )
-                            url_img = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
-                            
-                            supabase.table("schedine").delete().eq("squadra_id", s_id_scelta).eq("giornata", num_g_sch).execute()
-                            supabase.table("schedine").insert({
-                                "squadra_id": s_id_scelta,
-                                "giornata": num_g_sch,
-                                "schedina_url": url_img,
-                                "pronostici_json": pronostici_estratti
-                            }).execute()
-                            
-                            st.success(f"Schedina generata con successo dal codice '{codice_schedina}'!")
-                            time.sleep(1.5)
-                            st.rerun()
+                            img_bytes = crea_immagine_schedina(sq_scelta_sch, num_g_sch_auto, pronostici_estratti)
+                            if img_bytes:
+                                file_path = f"schedine/g{num_g_sch_auto}_{s_id_scelta}_{datetime.now().timestamp()}.png"
+                                supabase.storage.from_(BUCKET_NAME).upload(
+                                    path=file_path, file=img_bytes,
+                                    file_options={"content-type": "image/png", "upsert": "true"}
+                                )
+                                url_img = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                                
+                                supabase.table("schedine").delete().eq("squadra_id", s_id_scelta).eq("giornata", num_g_sch_auto).execute()
+                                supabase.table("schedine").insert({
+                                    "squadra_id": s_id_scelta,
+                                    "giornata": num_g_sch_auto,
+                                    "schedina_url": url_img,
+                                    "pronostici_json": pronostici_estratti
+                                }).execute()
+                                
+                                st.success(f"Schedina generata e pubblicata con successo per {sq_scelta_sch}!")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                st.error("Errore nella generazione dell'immagine della schedina.")
                         else:
-                            st.error("Codice schedina non riconosciuto nel sistema!")
+                            st.error("Codice schedina non trovato nell'archivio codici.")
                     else:
                         st.warning("Inserisci un codice valido.")
             else:
                 st.info("Aggiungi prima almeno una squadra.")
-                    
-        with tab4:
-            st.write("### Elimina Schedina o Squadra")
+                
+        with tab5:
+            st.write("### Elimina Schedina")
             g_del = st.selectbox("Giornata Schedina", lista_giornate_etichette, index=giornata_idx, key="g_del_sch")
             num_g_del = int(g_del.split()[1])
             try:
@@ -233,7 +283,7 @@ st.title("⚽ FantaBet Serie A")
 g_corrente = get_giornata_corrente()
 st.markdown(f"""
     <div class="alert-box">
-        💡 <b>Promemoria:</b> Siamo attualmente alla <b>Giornata {g_corrente}</b>. Controlla i risultati e le schedine!
+        💡 <b>Promemoria:</b> Siamo attualmente alla <b>Giornata {g_corrente}</b>. Carica la tua schedina in tempo!
     </div>
 """, unsafe_allow_html=True)
 
