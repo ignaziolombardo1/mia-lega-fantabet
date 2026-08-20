@@ -3,9 +3,8 @@ import io
 
 def crea_immagine_schedina(nome_squadra, giornata, pronostici_dict):
     """
-    pronostici_dict: Dizionario con le partite e i pronostici (es. {"Inter-Milan": "1", ...})
+    Crea l'immagine grafica della schedina con le partite e i pronostici.
     """
-    # Immagine più alta per contenere comodamente 10 partite
     width, height = 450, 600
     img = Image.new('RGB', (width, height), color='#0E1117')
     draw = ImageDraw.Draw(img)
@@ -24,7 +23,7 @@ def crea_immagine_schedina(nome_squadra, giornata, pronostici_dict):
     # Linea divisoria
     draw.line([(20, 80), (430, 80)], fill="#333333", width=2)
     
-    # Disegniamo le partite e i pronostici
+    # Disegna le partite e i pronostici
     y = 100
     for partita, segno in pronostici_dict.items():
         draw.text((20, y), f"{partita}", fill="white", font=font_testo)
