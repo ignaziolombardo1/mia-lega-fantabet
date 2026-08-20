@@ -41,8 +41,8 @@ st.markdown("""
     .schedina-box { background: rgba(25, 25, 30, 0.9); padding: 15px; border-radius: 10px; border: 1px solid #444; margin-bottom: 15px; }
     .grid-card { background: rgba(25, 25, 30, 0.85); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     
-    /* Stile per la schermata di caricamento iniziale (Splash Screen) */
-    .splash-screen {
+    /* Stile per la schermata di caricamento iniziale a tutto schermo */
+    .splash-container {
         position: fixed;
         top: 0;
         left: 0;
@@ -53,31 +53,27 @@ st.markdown("""
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        z-index: 99999;
-        animation: fadeOut 0.5s ease-in-out 1.2s forwards;
-    }
-    @keyframes fadeOut {
-        to { opacity: 0; visibility: hidden; }
+        z-index: 999999;
     }
     .pulse-logo {
-        width: 120px;
-        height: 120px;
+        width: 130px;
+        height: 130px;
         border-radius: 50%;
         object-fit: cover;
         border: 3px solid #4CAF50;
-        box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+        box-shadow: 0 0 25px rgba(76, 175, 80, 0.6);
         animation: pulse 1.5s infinite;
     }
     @keyframes pulse {
         0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
-        70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(76, 175, 80, 0); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(76, 175, 80, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
     }
     </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE CON IL TUO LOGO
+# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE
 # =========================================================
 
 if "app_loaded" not in st.session_state:
@@ -86,16 +82,18 @@ if "app_loaded" not in st.session_state:
 if not st.session_state.app_loaded:
     logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
     
-    st.markdown(f"""
-        <div class="splash-screen">
+    placeholder_splash = st.empty()
+    placeholder_splash.markdown(f"""
+        <div class="splash-container">
             <img src="{logo_splash_url}" class="pulse-logo" />
-            <h2 style="color: #FAFAFA; margin-top: 20px; font-family: sans-serif;">FantaBet Serie A Pro</h2>
-            <p style="color: #888; font-size: 0.9em;">Caricamento in corso...</p>
+            <h2 style="color: #FAFAFA; margin-top: 25px; font-family: sans-serif; letter-spacing: 1px;">FantaBet Serie A Pro</h2>
+            <p style="color: #888; font-size: 0.9em; margin-top: 5px;">Caricamento in corso...</p>
         </div>
     """, unsafe_allow_html=True)
     
-    time.sleep(1.2)
+    time.sleep(1.5)
     st.session_state.app_loaded = True
+    placeholder_splash.empty()
     st.rerun()
 
 # =========================================================
