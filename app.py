@@ -77,14 +77,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE
+# GESTIONE SCHERMATA DI CARICAMENTO INIZIALE CON IL TUO LOGO
 # =========================================================
 
 if "app_loaded" not in st.session_state:
     st.session_state.app_loaded = False
 
 if not st.session_state.app_loaded:
-    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/09303f4ca4eb42c4588877ea340edf896abdef02/background.jpg"
+    logo_splash_url = "https://raw.githubusercontent.com/ignaziolombardo1/mia-lega-fantabet/6e1768a34a416322ca5542717fd47fbf313a10d0/IMG_3743.jpeg"
     
     st.markdown(f"""
         <div class="splash-screen">
