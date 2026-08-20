@@ -512,3 +512,4 @@ elif st.session_state.current_page == "Schedine":
             st.info("Nessuna squadra registrata.")
     except Exception as e:
         st.error(f"Errore nel recupero delle schedine: {e}")
+
