@@ -1,10 +1,13 @@
 import requests
 
-# Inserisci qui la tua chiave API (quella fornita in precedenza)
 API_KEY = "4dcfdf02c9f757fdaa4f514a4cbb7cf3"
 HEADERS = {"x-rapidapi-key": API_KEY, "x-rapidapi-host": "api-football-v1.p.rapidapi.com"}
 
-def calcola_risultati_giornata(giornata, supabase_client):
+def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
+    """
+    Interroga l'API di calcio per ottenere i risultati reali della giornata
+    e calcola i punteggi confrontandoli con i dati salvati delle schedine.
+    """
     url = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
     querystring = {"league": "135", "season": "2026", "round": f"Regular Season - {giornata}"}
     
@@ -21,7 +24,6 @@ def calcola_risultati_giornata(giornata, supabase_client):
             if h_score is None or a_score is None:
                 continue
                 
-            # Calcolo del segno 1X2
             if h_score > a_score: segno = "1"
             elif a_score > h_score: segno = "2"
             else: segno = "X"
@@ -29,28 +31,31 @@ def calcola_risultati_giornata(giornata, supabase_client):
             risultati_reali[f"{home} - {away}"] = segno
         
         if not risultati_reali:
-            return False, "Nessun risultato ufficiale trovato per questa giornata (le partite potrebbero non essere ancora iniziate)."
+            return False, "Nessun risultato ufficiale trovato tramite API per questa giornata (le partite potrebbero non essere finite)."
         
-        # Recupera le schedine degli utenti dal database
+        # Recupera le schedine degli utenti
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         
         if not schedine:
-            return False, "Nessuna schedina trovata per questa giornata nel database."
+            return False, "Nessuna schedina trovata per questa giornata."
         
         for sch in schedine:
+            pronostici = sch.get('pronostici_json')
+            if not pronostici:
+                continue
+                
             punti = 0
-            pronostici = sch['pronostici_json']
             for partita, segno_utente in pronostici.items():
                 if risultati_reali.get(partita) == segno_utente:
                     punti += 1
             
-            # Aggiorna la tabella dei risultati su Supabase
+            # Salva il punteggio calcolato
             supabase_client.table("risultati").upsert({
                 "squadra_id": sch['squadra_id'],
                 "punteggio": punti,
                 "giornata": giornata
             }, on_conflict="squadra_id,giornata").execute()
             
-        return True, "Classifica aggiornata con successo dal Bot!"
+        return True, "Classifica calcolata e aggiornata con successo dal Bot!"
     except Exception as e:
-        return False, f"Errore di connessione o elaborazione: {str(e)}"
+        return False, f"Errore durante l'elaborazione: {str(e)}"
