@@ -1,4 +1,5 @@
+google-genai
 streamlit
 supabase
 pandas
-openai
+pillow
