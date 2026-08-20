@@ -5,7 +5,6 @@ import pandas as pd
 import time
 import os
 import json
-import requests
 from openai import OpenAI
 
 # =========================================================
@@ -96,7 +95,7 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E LOGICA DEL BOT INTELLIGENTE
+# FUNZIONI DI SUPPORTO E LOGICA DEL BOT DI LETTURA SEGNI
 # =========================================================
 
 def get_giornata_corrente():
@@ -131,48 +130,12 @@ except Exception:
 
 lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
 
-def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
+def analizza_schedine_ia(giornata, supabase_client):
     try:
-        # 1. Recupera le schedine caricate per la giornata selezionata
         schedine = supabase_client.table("schedine").select("*").eq("giornata", giornata).execute().data
         if not schedine:
             return False, f"Nessuna schedina trovata per la Giornata {giornata}. Carica prima le foto."
         
-        # 2. Scarica i risultati reali tramite RapidAPI (API-Football)
-        rapidapi_key = os.environ.get("RAPIDAPI_KEY")
-        if not rapidapi_key:
-            try:
-                rapidapi_key = st.secrets.get("RAPIDAPI_KEY")
-            except Exception:
-                pass
-
-        risultati_reali_str = ""
-        if rapidapi_key:
-            url_api = "https://api-football-v1.p.rapidapi.com/v3/fixtures"
-            querystring = {"league": "135", "season": "2026", "round": f"Regular Season - {giornata}"}
-            headers = {
-                "X-RapidAPI-Key": rapidapi_key,
-                "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com"
-            }
-            try:
-                res_api = requests.get(url_api, headers=headers, params=querystring)
-                if res_api.status_code == 200:
-                    fixtures = res_api.json().get("response", [])
-                    match_elenco = []
-                    for fx in fixtures:
-                        casa = fx["teams"]["home"]["name"]
-                        trasferta = fx["teams"]["away"]["name"]
-                        if fx["fixture"]["status"]["short"] == "FT":
-                            gc = fx["goals"]["home"]
-                            gt = fx["goals"]["away"]
-                            segno = "1" if gc > gt else ("2" if gc < gt else "X")
-                            match_elenco.append(f"- {casa} vs {trasferta}: {gc}-{gt} (Esito: {segno})")
-                    if match_elenco:
-                        risultati_reali_str = "Risultati ufficiali della giornata:\n" + "\n".join(match_elenco)
-            except Exception as e:
-                print(f"Errore chiamata API calcio: {e}")
-
-        # 3. Configura OpenAI
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             try:
@@ -192,15 +155,11 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                 continue
             
             try:
-                prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A.
-                {risultati_reali_str}
-                
-                1. Estrai i pronostici delle partite presenti nella schedina (es. 1, X, 2).
-                2. Sulla base dei risultati reali ufficiali forniti sopra, verifica ogni pronostico assegnando 1 punto per ogni esito corretto e 0 per quelli errati.
-                Restituisci la risposta ESCLUSIVAMENTE in formato JSON con questa struttura esatta, senza altri testi:
+                # Prompt focalizzato unicamente sull'estrazione sequenziale dei pronostici
+                prompt_testo = f"""Analizza questa schedina della Giornata {giornata} di Serie A ed estrai unicamente la lista sequenziale dei pronostici giocati (es. 1, X, 2).
+                Restituisci la risposta ESCLUSIVAMENTE in formato JSON con questa struttura esatta:
                 {{
-                    "pronostici": ["1", "X", "2", ...],
-                    "punteggio_totale": 2
+                    "pronostici": ["1", "X", "2", ...]
                 }}"""
                 
                 response = client.chat.completions.create(
@@ -214,28 +173,23 @@ def calcola_risultati_da_foto_o_dati(giornata, supabase_client):
                             ]
                         }
                     ],
-                    max_tokens=250,
+                    max_tokens=200,
                     response_format={"type": "json_object"}
                 )
                 
                 risposta_json = json.loads(response.choices[0].message.content.strip())
                 pronostici_letti = risposta_json.get("pronostici", [])
-                punti_ottenuti = int(risposta_json.get("punteggio_totale", 0))
+                
+                # Salva i pronostici estratti nel record della schedina su Supabase
+                supabase_client.table("schedine").update({
+                    "pronostici_json": {"segni": pronostici_letti}
+                }).eq("id", s['id']).execute()
+                
+                report.append(f"Squadra ID {s['squadra_id']}: Letti {len(pronostici_letti)} pronostici ({pronostici_letti})")
                 
             except Exception as ex:
                 report.append(f"Squadra ID {s['squadra_id']}: Errore lettura IA ({str(ex)})")
                 continue
-            
-            # Salva o aggiorna il punteggio calcolato nel database Supabase
-            supabase_client.table("risultati").delete().eq("squadra_id", s['squadra_id']).eq("giornata", giornata).execute()
-            
-            supabase_client.table("risultati").insert({
-                "squadra_id": s['squadra_id'], 
-                "giornata": giornata, 
-                "punteggio": punti_ottenuti
-            }).execute()
-            
-            report.append(f"Squadra ID {s['squadra_id']}: {punti_ottenuti} punti (Pronostici letti: {pronostici_letti})")
         
         return True, "\n".join(report)
         
@@ -293,27 +247,30 @@ with st.sidebar:
                         st.warning("Inserisci il nome della squadra.")
 
         with tab2:
-            st.write("### 🤖 Bot Intelligente Schedine")
-            st.caption("Il bot scarica i risultati reali tramite API, legge le foto e calcola i punti in autonomia.")
-            g_auto = st.selectbox("Giornata da Analizzare", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
+            st.write("### 🤖 Bot Estrazione Segni")
+            st.caption("Il bot estrae in modo pulito i pronostici (1, X, 2) dalle foto caricate salvandoli nell'archivio.")
+            g_auto = st.selectbox("Giornata da Estrarre", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
             
-            if st.button("🚀 Avvia Analisi IA e Assegna Punti"):
-                with st.spinner("Il bot sta esaminando le schedine in corso..."):
-                    successo, messaggio = calcola_risultati_da_foto_o_dati(num_g_auto, supabase)
+            if st.button("🚀 Avvia Estrazione IA Pronostici"):
+                with st.spinner("Il bot sta leggendo le schedine..."):
+                    successo, messaggio = analizza_schedine_ia(num_g_auto, supabase)
                     if successo:
-                        st.success("Analisi completata con successo!")
-                        st.text_area("Log di lettura del Bot:", value=messaggio, height=180)
+                        st.success("Estrazione completata!")
+                        st.text_area("Log di lettura:", value=messaggio, height=180)
                     else:
                         st.error(messaggio)
             
-            if st.checkbox("Mostra anteprima punteggi salvati nel DB"):
-                dati_db = supabase.table("risultati").select("*").eq("giornata", num_g_auto).execute().data
-                if dati_db:
-                    df_debug = pd.DataFrame(dati_db)
-                    st.dataframe(df_debug, use_container_width=True)
+            if st.checkbox("Mostra pronostici letti dal bot"):
+                schedine_db = supabase.table("schedine").select("*").eq("giornata", num_g_auto).execute().data
+                if schedine_db:
+                    for sch in schedine_db:
+                        sq_obj = next((s for s in squadre if s['id'] == sch['squadra_id']), None)
+                        nome_sq = sq_obj['nome_squadra'] if sq_obj else f"ID {sch['squadra_id']}"
+                        segni_letti = sch.get('pronostici_json', {}).get('segni', [])
+                        st.write(f"**{nome_sq}**: {segni_letti}")
                 else:
-                    st.warning("Nessun punteggio registrato per questa giornata.")
+                    st.warning("Nessuna schedina registrata per questa giornata.")
 
         with tab3:
             st.write("### 🎫 Carica Schedine in Blocco")
@@ -367,7 +324,7 @@ with st.sidebar:
                 st.info("Nessuna squadra disponibile.")
                 
         with tab4:
-            st.write("### Inserisci o Modifica Punti Manualmente")
+            st.write("### Inserisci o Modifica Punti")
             if squadre:
                 squadre_ordinate_admin = sorted(squadre, key=lambda x: x['nome_squadra'])
                 with st.form("add_p_multi"):
