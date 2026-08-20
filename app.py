@@ -123,17 +123,18 @@ with st.sidebar:
                 g_part = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_part_sel")
                 num_g_part = int(g_part.split()[1])
                 
-                p1 = st.text_input("Partita 1 (es. Inter - Milan)")
-                p2 = st.text_input("Partita 2 (es. Juventus - Napoli)")
-                p3 = st.text_input("Partita 3 (es. Roma - Lazio)")
+                st.info("Inserisci le 10 partite della giornata (una per riga o nei campi sottostanti):")
+                partite_input = []
+                for i in range(1, 11):
+                    p = st.text_input(f"Partita {i}", key=f"p_input_{i}")
+                    if p.strip():
+                        partite_input.append(p.strip())
                 
-                if st.form_submit_button("Salva Partite"):
+                if st.form_submit_button("Salva Tutte e 10 le Partite"):
                     supabase.table("partite_giornata").delete().eq("giornata", num_g_part).execute()
-                    partite_inserite = [p1, p2, p3]
-                    for p in partite_inserite:
-                        if p.strip():
-                            supabase.table("partite_giornata").insert({"giornata": num_g_part, "partita": p.strip()}).execute()
-                    st.success("Partite salvate con successo!")
+                    for p in partite_input:
+                        supabase.table("partite_giornata").insert({"giornata": num_g_part, "partita": p}).execute()
+                    st.success(f"Salvate {len(partite_input)} partite per la Giornata {num_g_part}!")
                     time.sleep(1.5)
                     st.rerun()
 
@@ -173,7 +174,7 @@ with st.sidebar:
                     with st.form("form_genera_schedina"):
                         pronostici_correnti = {}
                         for p in partite_giornata:
-                            pronostici_correnti[p] = st.selectbox(f"Pronostico per: {p}", ["1", "X", "2"], key=f"pron_{p}")
+                            pronostici_correnti[p] = st.selectbox(f"Pronostico: {p}", ["1", "X", "2"], key=f"pron_{p}")
                         
                         if st.form_submit_button("Crea e Carica Schedina"):
                             img_bytes = crea_immagine_schedina(sq_scelta_sch, num_g_sch, pronostici_correnti)
@@ -197,7 +198,7 @@ with st.sidebar:
                             time.sleep(1.5)
                             st.rerun()
                 else:
-                    st.warning("Prima inserisci le partite per questa giornata nella tab 'Partite'!")
+                    st.warning("Prima inserisci le 10 partite per questa giornata nella tab 'Partite'!")
             else:
                 st.info("Aggiungi prima almeno una squadra.")
                     
