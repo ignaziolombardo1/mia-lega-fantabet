@@ -486,7 +486,6 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="flex-grow:1; margin-left:5px; font-weight:bold; font-size:1.1em;">{item['nome']}</span>
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
-            # Controllo corretto senza errori di sintassi
             if not is_coppa:
                 with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
                     if item['dettaglio']:
@@ -522,5 +521,4 @@ elif st.session_state.current_page == "Schedine":
         else:
             st.info("Nessuna squadra registrata.")
     except Exception as e:
-    
         st.error(f"Errore nel recupero delle schedine: {e}")
