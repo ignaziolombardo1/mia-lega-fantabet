@@ -377,7 +377,7 @@ def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
 
 
 # =========================================================
-# FUNZIONI PER STATISTICHE E BADGE (PUNTI 1 & 2)
+# FUNZIONI PER STATISTICHE E BADGE
 # =========================================================
 
 def calcola_statistiche_squadra(squadra_id, risultati_totali):
@@ -614,15 +614,38 @@ with st.sidebar:
                     st.rerun()
 
         with tab6:
-            st.write("### 📢 Bacheca Ultime Notizie")
-            nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine entro venerdì!")
-            if st.button("Pubblica News"):
+            st.write("### 📢 Bacheca Ultime Notizie & Video")
+            nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine!")
+            
+            # Campo caricamento video opzionale
+            video_file = st.file_uploader("Carica Video Notizia (Opzionale)", type=["mp4", "mov", "avi"])
+            
+            if st.button("Pubblica News con Video"):
+                video_url = ""
+                if video_file is not None:
+                    nome_file_vid = f"news_{datetime.now().timestamp()}_{video_file.name}"
+                    try:
+                        file_path = f"news/{nome_file_vid}"
+                        supabase.storage.from_(BUCKET_NAME).upload(
+                            path=file_path, file=video_file.getvalue(),
+                            file_options={"content-type": video_file.type, "upsert": "true"}
+                        )
+                        video_url = supabase.storage.from_(BUCKET_NAME).get_public_url(file_path)
+                    except Exception as e:
+                        st.error(f"Errore caricamento video: {e}")
+
                 try:
                     supabase.table("news").delete().neq("id", 0).execute()
                 except Exception:
                     pass
-                supabase.table("news").insert({"testo": nuova_news, "data": str(datetime.now().date())}).execute()
-                st.toast("News pubblicata con successo!", icon="📢")
+                    
+                supabase.table("news").insert({
+                    "testo": nuova_news, 
+                    "video_url": video_url, 
+                    "data": str(datetime.now().date())
+                }).execute()
+                
+                st.toast("News e Video pubblicati con successo!", icon="🎬")
                 time.sleep(1.0)
                 st.rerun()
 
@@ -632,16 +655,22 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# Mostra la bacheca news se presente
+# Mostra la bacheca news e l'eventuale video
 try:
     news_data = supabase.table("news").select("*").execute().data
     if news_data:
-        ultima_news = news_data[0]['testo']
+        ultima_news = news_data[0].get('testo', '')
+        video_url_news = news_data[0].get('video_url', '')
+        
         st.markdown(f"""
             <div class="alert-box" style="border-left: 5px solid #FFD700; background: rgba(255, 215, 0, 0.1);">
                 📢 <b>Comunicato della Lega:</b> {html.escape(ultima_news)}
             </div>
         """, unsafe_allow_html=True)
+        
+        if video_url_news:
+            st.video(video_url_news)
+            
 except Exception:
     pass
 
