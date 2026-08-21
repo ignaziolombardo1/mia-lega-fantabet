@@ -377,6 +377,34 @@ def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
 
 
 # =========================================================
+# FUNZIONI PER STATISTICHE E BADGE (PUNTI 1 & 2)
+# =========================================================
+
+def calcola_statistiche_squadra(squadra_id, risultati_totali):
+    res_squadra = [r for r in risultati_totali if r['squadra_id'] == squadra_id and r.get('punteggio') is not None]
+    if not res_squadra:
+        return {"media": 0.0, "best": 0, "giornate_giocate": 0, "badge": []}
+    
+    punti_lista = [int(r['punteggio']) for r in res_squadra]
+    tot_giornate = len(punti_lista)
+    media = sum(punti_lista) / tot_giornate if tot_giornate > 0 else 0
+    best = max(punti_lista) if punti_lista else 0
+    
+    badge = []
+    if best >= 8:
+        badge.append("🔥 Bomber di Giornata")
+    if tot_giornate >= 3 and media >= 5.0:
+        badge.append("🎯 Cecchino Costante")
+        
+    return {
+        "media": round(media, 2),
+        "best": best,
+        "giornate_giocate": tot_giornate,
+        "badge": badge
+    }
+
+
+# =========================================================
 # BARRA LATERALE ADMIN
 # =========================================================
 
@@ -400,7 +428,7 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ Squadra", "🤖 Trascrizione IA", "🎫 Schedine", "⚽ Punti Manuali", "🗑️ Elimina"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["➕ Squadra", "🤖 IA", "🎫 Schedine", "⚽ Punti", "🗑️ Elimina", "📢 News"])
         
         with tab1:
             with st.form("add_s"):
@@ -585,11 +613,37 @@ with st.sidebar:
                     time.sleep(1.0)
                     st.rerun()
 
+        with tab6:
+            st.write("### 📢 Bacheca Ultime Notizie")
+            nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine entro venerdì!")
+            if st.button("Pubblica News"):
+                try:
+                    supabase.table("news").delete().neq("id", 0).execute()
+                except Exception:
+                    pass
+                supabase.table("news").insert({"testo": nuova_news, "data": str(datetime.now().date())}).execute()
+                st.toast("News pubblicata con successo!", icon="📢")
+                time.sleep(1.0)
+                st.rerun()
+
 # =========================================================
 # INTERFACCIA PRINCIPALE
 # =========================================================
 
 st.title("⚽ FantaBet Serie A Pro")
+
+# Mostra la bacheca news se presente
+try:
+    news_data = supabase.table("news").select("*").execute().data
+    if news_data:
+        ultima_news = news_data[0]['testo']
+        st.markdown(f"""
+            <div class="alert-box" style="border-left: 5px solid #FFD700; background: rgba(255, 215, 0, 0.1);">
+                📢 <b>Comunicato della Lega:</b> {html.escape(ultima_news)}
+            </div>
+        """, unsafe_allow_html=True)
+except Exception:
+    pass
 
 g_corrente = get_giornata_corrente()
 st.markdown(f"""
@@ -642,9 +696,23 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
                         <span style="font-weight:bold; color:#4CAF50; font-size:1.1em;">{item['punti']} pts</span></div></div>""", unsafe_allow_html=True)
             
             if not is_coppa:
-                with st.expander(f"📊 Dettaglio Giornate - {item['nome']}"):
+                stats = calcola_statistiche_squadra(item['id'], risultati)
+                with st.expander(f"📊 Dettaglio & Statistiche - {item['nome']}"):
+                    if stats['badge']:
+                        st.markdown("##### 🏆 Riconoscimenti & Badge")
+                        badges_html = " ".join([f"<span style='background:rgba(255,215,0,0.2); border:1px solid #FFD700; padding:4px 8px; border-radius:8px; font-size:0.85em; margin-right:5px;'>{b}</span>" for b in stats['badge']])
+                        st.markdown(badges_html, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        
+                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                    col_stat1.metric("Media Punti", stats['media'])
+                    col_stat2.metric("Record Giornata", stats['best'])
+                    col_stat3.metric("Giornate Giocate", stats['giornate_giocate'])
+                    
                     if item['dettaglio']:
-                        st.dataframe(pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).set_index('Giornata'), use_container_width=True)
+                        st.markdown("---")
+                        df_dettaglio = pd.DataFrame(list(item['dettaglio'].items()), columns=['Giornata', 'Punti']).sort_values('Giornata')
+                        st.dataframe(df_dettaglio.set_index('Giornata'), use_container_width=True)
                     else:
                         st.info("Nessun punteggio registrato.")
     else:
@@ -656,7 +724,6 @@ elif st.session_state.current_page == "Schedine":
     num_g = int(giornata_scelta.split()[1])
     
     try:
-        # LOGICA DI VISIBILITÀ: Se non sei admin, mostra solo le schedine con visibile = True
         query = supabase.table("schedine").select("*").eq("giornata", num_g)
         if not st.session_state.get("admin", False):
             query = query.eq("visibile", True)
