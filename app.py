@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pandas as pd
 import time
 import html
@@ -123,26 +123,26 @@ def get_orario_prima_partita(giornata):
     except Exception:
         return None
 
-def mostra_countdown_giornata(giornata):
+def mostra_countdown_giornata_home(giornata):
     prime_match_time = get_orario_prima_partita(giornata)
     if not prime_match_time:
-        st.caption(f"⏳ Orario d'inizio Giornata {giornata} non disponibile.")
         return
 
     now = datetime.now(timezone.utc)
     diff = prime_match_time - now
+    
+    # Se mancano più di 0 secondi, mostra il countdown
     if diff.total_seconds() > 0:
         g, r = diff.days, diff.seconds
         h, r = divmod(r, 3600)
         m, s = divmod(r, 60)
         st.markdown(f"""
             <div class="alert-box" style="text-align: center; border-left: 5px solid #FF4B4B;">
-                ⏳ <b>Inizio Prima Partita (Giornata {giornata}):</b><br>
-                <span style="font-size: 1.2em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
+                ⏳ <b>Countdown Inizio Giornata {giornata} (Prima Partita):</b><br>
+                <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
             </div>
         """, unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="alert-box" style="text-align: center; border-left: 5px solid #4CAF50;">⚽ Giornata {giornata} in corso o iniziata!</div>', unsafe_allow_html=True)
+    # Se la prima partita è iniziata, non mostriamo nulla (si "leva" da solo finché non finisce la giornata)
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -476,8 +476,6 @@ with st.sidebar:
             st.write("### 🤖 Calcolo Punti Automatico con IA")
             g_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
-            
-            mostra_countdown_giornata(num_g_auto)
 
             col_a1, col_a2 = st.columns(2)
             if col_a1.button("🔍 Solo trascrivi schedine"):
@@ -528,8 +526,6 @@ with st.sidebar:
                 g_sch = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
-                mostra_countdown_giornata(num_g_sch)
-                
                 st.markdown("---")
                 dati_caricamento = {}
                 for s in squadre_ordinate():
@@ -577,9 +573,6 @@ with st.sidebar:
             if squadre:
                 g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                 num_g_pts = int(g_pts.split()[1])
-                
-                mostra_countdown_giornata(num_g_pts)
-
                 existing_res = {r['squadra_id']: r['punteggio'] for r in supabase.table("risultati").select("squadra_id, punteggio").eq("giornata", num_g_pts).execute().data or []}
 
                 with st.form("add_p_multi"):
@@ -645,7 +638,6 @@ with st.sidebar:
         with tab6:
             st.write("### 📢 Bacheca Ultime Notizie & Video")
             nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine!")
-            
             video_file = st.file_uploader("Carica Video Notizia (Opzionale)", type=["mp4", "mov", "avi"])
             
             if st.button("Pubblica News con Video"):
@@ -662,10 +654,11 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Errore caricamento video: {e}")
 
+                # Salviamo il timestamp corrente per il controllo delle 24 ore
                 supabase.table("news").insert({
                     "testo": nuova_news, 
                     "video_url": video_url, 
-                    "data": str(datetime.now().date())
+                    "data": datetime.now(timezone.utc).isoformat()
                 }).execute()
                 
                 st.toast("News e Video pubblicati con successo!", icon="🎬")
@@ -678,7 +671,7 @@ with st.sidebar:
             
             for n in news_correnti:
                 col_testo, col_elimina = st.columns([0.8, 0.2])
-                col_testo.info(f"{n['data']}: {n['testo']}")
+                col_testo.info(f"{n['data'][:10]}: {n['testo']}")
                 
                 if col_elimina.button("🗑️", key=f"del_news_{n['id']}"):
                     supabase.table("news").delete().eq("id", n['id']).execute()
@@ -692,24 +685,9 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# SEZIONE NEWS E VIDEO VISIBILE SOLO NELLA SCHERMATA HOME
-try:
-    news_data = supabase.table("news").select("*").order("id", desc=True).execute().data
-    if news_data:
-        ultima_news = news_data[0].get('testo', '')
-        video_url_news = news_data[0].get('video_url', '')
-        
-        st.markdown(f"""
-            <div class="alert-box" style="border-left: 5px solid #FFD700; background: rgba(255, 215, 0, 0.1);">
-                📢 <b>Comunicato della Lega:</b> {html.escape(ultima_news)}
-            </div>
-        """, unsafe_allow_html=True)
-        
-        if video_url_news:
-            st.video(video_url_news)
-            
-except Exception:
-    pass
+# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE (svanisce a inizio giornata)
+g_corrente = get_giornata_corrente()
+mostra_countdown_giornata_home(g_corrente)
 
 g_corrente = get_giornata_corrente()
 st.markdown(f"""
@@ -737,6 +715,37 @@ def calcola_classifica(giornate_target=None):
         dettaglio_giornate = {int(r['giornata']): int(r['punteggio']) for r in res_squadra if r.get('giornata') is not None}
         classifica_temp.append({'id': s['id'], 'nome': s['nome_squadra'], 'punti': punti_totali, 'logo': s.get('logo_url'), 'dettaglio': dettaglio_giornate})
     return sorted(classifica_temp, key=lambda x: (-x['punti'], x['nome']))
+
+if st.session_state.current_page == "Classifica":
+    # SEZIONE NEWS E VIDEO (SOLO IN CLASSIFICA E VALIDE PER MAX 24 ORE)
+    try:
+        news_data = supabase.table("news").select("*").order("id", desc=True).execute().data
+        if news_data:
+            ultima_news_obj = news_data[0]
+            data_news_str = ultima_news_obj.get('data', '')
+            
+            # Controllo validità 24 ore
+            if data_news_str:
+                try:
+                    data_news = datetime.fromisoformat(data_news_str.replace("Z", "+00:00"))
+                except ValueError:
+                    data_news = datetime.strptime(data_news_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                
+                adesso = datetime.now(timezone.utc)
+                if adesso - data_news <= timedelta(hours=24):
+                    ultima_news = ultima_news_obj.get('testo', '')
+                    video_url_news = ultima_news_obj.get('video_url', '')
+                    
+                    st.markdown(f"""
+                        <div class="alert-box" style="border-left: 5px solid #FFD700; background: rgba(255, 215, 0, 0.1);">
+                            📢 <b>Comunicato della Lega:</b> {html.escape(ultima_news)}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if video_url_news:
+                        st.video(video_url_news)
+    except Exception:
+        pass
 
 if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Primavera"]:
     is_coppa = st.session_state.current_page != "Classifica"
@@ -786,8 +795,6 @@ elif st.session_state.current_page == "Schedine":
     st.title("📅 Archivio Schedine")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
     num_g = int(giornata_scelta.split()[1])
-    
-    mostra_countdown_giornata(num_g)
     
     try:
         query = supabase.table("schedine").select("*").eq("giornata", num_g)
