@@ -1,6 +1,6 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 import time
 import html
@@ -104,8 +104,45 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO
+# FUNZIONI DI SUPPORTO E COUNTDOWN
 # =========================================================
+
+def get_orario_prima_partita(giornata):
+    if not FOOTBALL_DATA_API_KEY:
+        return None
+    try:
+        headers = {"X-Auth-Token": FOOTBALL_DATA_API_KEY}
+        url = f"https://api.football-data.org/v4/competitions/SA/matches?matchday={giornata}"
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        matches = resp.json().get("matches", [])
+        if not matches: 
+            return None
+        orari = [datetime.fromisoformat(m["utcDate"].replace("Z", "+00:00")) for m in matches if m.get("utcDate")]
+        return min(orari) if orari else None
+    except Exception:
+        return None
+
+def mostra_countdown_giornata(giornata):
+    prime_match_time = get_orario_prima_partita(giornata)
+    if not prime_match_time:
+        st.caption(f"⏳ Orario d'inizio Giornata {giornata} non disponibile.")
+        return
+
+    now = datetime.now(timezone.utc)
+    diff = prime_match_time - now
+    if diff.total_seconds() > 0:
+        g, r = diff.days, diff.seconds
+        h, r = divmod(r, 3600)
+        m, s = divmod(r, 60)
+        st.markdown(f"""
+            <div class="alert-box" style="text-align: center; border-left: 5px solid #FF4B4B;">
+                ⏳ <b>Inizio Prima Partita (Giornata {giornata}):</b><br>
+                <span style="font-size: 1.2em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="alert-box" style="text-align: center; border-left: 5px solid #4CAF50;">⚽ Giornata {giornata} in corso o iniziata!</div>', unsafe_allow_html=True)
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -439,6 +476,8 @@ with st.sidebar:
             st.write("### 🤖 Calcolo Punti Automatico con IA")
             g_auto = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_auto_api")
             num_g_auto = int(g_auto.split()[1])
+            
+            mostra_countdown_giornata(num_g_auto)
 
             col_a1, col_a2 = st.columns(2)
             if col_a1.button("🔍 Solo trascrivi schedine"):
@@ -489,6 +528,8 @@ with st.sidebar:
                 g_sch = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_sch_foto_multi")
                 num_g_sch = int(g_sch.split()[1])
                 
+                mostra_countdown_giornata(num_g_sch)
+                
                 st.markdown("---")
                 dati_caricamento = {}
                 for s in squadre_ordinate():
@@ -536,6 +577,9 @@ with st.sidebar:
             if squadre:
                 g_pts = st.selectbox("Seleziona Giornata", lista_giornate_etichette, index=giornata_idx, key="g_pts_multi")
                 num_g_pts = int(g_pts.split()[1])
+                
+                mostra_countdown_giornata(num_g_pts)
+
                 existing_res = {r['squadra_id']: r['punteggio'] for r in supabase.table("risultati").select("squadra_id, punteggio").eq("giornata", num_g_pts).execute().data or []}
 
                 with st.form("add_p_multi"):
@@ -648,6 +692,7 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
+# SEZIONE NEWS E VIDEO VISIBILE SOLO NELLA SCHERMATA HOME
 try:
     news_data = supabase.table("news").select("*").order("id", desc=True).execute().data
     if news_data:
@@ -703,8 +748,6 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             df_export = pd.DataFrame([{'Squadra': item['nome'], 'Punti Totali': item['punti']} for item in classifica])
             st.download_button("📥 Esporta Classifica CSV", df_export.to_csv(index=False).encode('utf-8'), "classifica_fantabet.csv", "text/csv")
         
-        giornate_registrate_set = {r.get('giornata') for r in risultati}
-        
         for pos, item in enumerate(classifica, 1):
             c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else "" if not is_coppa else ("gold" if pos == 1 else "")
             badge_pos = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"{pos}°" if not is_coppa else ("🥇" if pos == 1 else f"{pos}°")
@@ -743,6 +786,8 @@ elif st.session_state.current_page == "Schedine":
     st.title("📅 Archivio Schedine")
     giornata_scelta = st.selectbox("Seleziona Giornata", [f"Giornata {i}" for i in range(1, 39)], index=giornata_idx)
     num_g = int(giornata_scelta.split()[1])
+    
+    mostra_countdown_giornata(num_g)
     
     try:
         query = supabase.table("schedine").select("*").eq("giornata", num_g)
