@@ -144,10 +144,8 @@ except Exception as e:
 
 lista_giornate_etichette = [f"Giornata {i} {'✅' if i in giornate_completate else ''}" for i in range(1, 39)]
 
-
 def squadre_ordinate():
     return sorted(squadre, key=lambda x: x['nome_squadra'])
-
 
 def valida_immagine(file, max_mb=MAX_UPLOAD_MB):
     if file is None:
@@ -157,7 +155,6 @@ def valida_immagine(file, max_mb=MAX_UPLOAD_MB):
     if not file.type or not file.type.startswith("image/"):
         return False, f"'{file.name}' non è un'immagine valida."
     return True, ""
-
 
 def carica_su_storage(file, cartella, nome_file):
     ok, msg = valida_immagine(file)
@@ -175,7 +172,6 @@ def carica_su_storage(file, cartella, nome_file):
         st.error(f"Errore caricamento file su storage: {e}")
         return None
 
-
 def elimina_da_storage(url):
     if not url:
         return
@@ -188,7 +184,6 @@ def elimina_da_storage(url):
         supabase.storage.from_(BUCKET_NAME).remove([path])
     except Exception as e:
         st.warning(f"Impossibile rimuovere un file dallo storage ({e}).")
-
 
 def trascrivi_schedina_ia(giornata, supabase_client):
     try:
@@ -224,7 +219,6 @@ def trascrivi_schedina_ia(giornata, supabase_client):
     except Exception as e:
         return False, f"Errore generale: {str(e)}"
 
-
 # =========================================================
 # ANALISI AUTOMATICA SCHEDINE E CALCOLO PUNTI
 # =========================================================
@@ -237,7 +231,6 @@ SEGNI_VALIDI = {
     "over_under": {"OVER", "UNDER"},
 }
 
-
 def normalizza_nome_squadra(nome):
     if not nome:
         return ""
@@ -248,13 +241,11 @@ def normalizza_nome_squadra(nome):
             nome = nome[len(p):]
     return nome.strip()
 
-
 def squadre_corrispondono(nome_a, nome_b):
     na, nb = normalizza_nome_squadra(nome_a), normalizza_nome_squadra(nome_b)
     if not na or not nb:
         return False
     return na == nb or na in nb or nb in na
-
 
 @st.cache_data(ttl=3600)
 def recupera_risultati_giornata(giornata):
@@ -286,13 +277,11 @@ def recupera_risultati_giornata(giornata):
     except Exception as e:
         return None, f"Errore nel recupero risultati da football-data.org: {e}"
 
-
 def trova_match_reale(squadra_casa, squadra_trasferta, risultati_reali):
     for m in risultati_reali:
         if squadre_corrispondono(squadra_casa, m["casa"]) and squadre_corrispondono(squadra_trasferta, m["trasferta"]):
             return m
     return None
-
 
 def valuta_pronostico(pick, match):
     gol_casa, gol_trasferta = match["gol_casa"], match["gol_trasferta"]
@@ -311,7 +300,6 @@ def valuta_pronostico(pick, match):
         over = (gol_casa + gol_trasferta) > 2.5
         return pronostico == ("OVER" if over else "UNDER")
     return False
-
 
 def estrai_pronostici_schedina(schedina_url, model):
     try:
@@ -335,7 +323,6 @@ def estrai_pronostici_schedina(schedina_url, model):
         return picks_validi, None
     except Exception as e:
         return None, f"Errore lettura/analisi immagine: {e}"
-
 
 def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
     risultati_reali, err = recupera_risultati_giornata(giornata)
@@ -375,7 +362,6 @@ def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
 
     return report, None
 
-
 # =========================================================
 # FUNZIONI PER STATISTICHE E BADGE
 # =========================================================
@@ -402,7 +388,6 @@ def calcola_statistiche_squadra(squadra_id, risultati_totali):
         "giornate_giocate": tot_giornate,
         "badge": badge
     }
-
 
 # =========================================================
 # BARRA LATERALE ADMIN
@@ -613,11 +598,10 @@ with st.sidebar:
                     time.sleep(1.0)
                     st.rerun()
 
-     with tab6:
+        with tab6:
             st.write("### 📢 Bacheca Ultime Notizie & Video")
-            
-            # --- INSERIMENTO NEWS ---
             nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine!")
+            
             video_file = st.file_uploader("Carica Video Notizia (Opzionale)", type=["mp4", "mov", "avi"])
             
             if st.button("Pubblica News con Video"):
@@ -645,8 +629,6 @@ with st.sidebar:
                 st.rerun()
 
             st.markdown("---")
-            
-            # --- ELIMINAZIONE NEWS ---
             st.write("### 🗑️ Gestione News Esistenti")
             news_correnti = supabase.table("news").select("id, testo, data").order("id", desc=True).execute().data or []
             
@@ -666,9 +648,8 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# Mostra la bacheca news e l'eventuale video
 try:
-    news_data = supabase.table("news").select("*").execute().data
+    news_data = supabase.table("news").select("*").order("id", desc=True).execute().data
     if news_data:
         ultima_news = news_data[0].get('testo', '')
         video_url_news = news_data[0].get('video_url', '')
