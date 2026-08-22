@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from supabase import create_client
 from datetime import datetime, timezone, timedelta
 import pandas as pd
@@ -142,6 +143,18 @@ def mostra_countdown_giornata_home(giornata):
                 <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
             </div>
         """, unsafe_allow_html=True)
+        
+        # Componente invisibile per aggiornare la pagina ogni 60 secondi e far scorrere il tempo
+        components.html(
+            """
+            <script>
+                setTimeout(function(){
+                    window.parent.location.reload();
+                }, 60000);
+            </script>
+            """,
+            height=0,
+        )
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -361,7 +374,6 @@ def estrai_pronostici_schedina(schedina_url, model):
         return None, f"Errore lettura/analisi immagine: {e}"
 
 def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
-    # Svuota la cache per garantire il refresh dei risultati reali appena segnati
     recupera_risultati_giornata.clear()
     
     risultati_reali, err = recupera_risultati_giornata(giornata)
@@ -686,7 +698,7 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE (svanisce a inizio giornata)
+# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE CON REFRESH AUTOMATICO
 g_corrente = get_giornata_corrente()
 mostra_countdown_giornata_home(g_corrente)
 
@@ -718,7 +730,6 @@ def calcola_classifica(giornate_target=None):
     return sorted(classifica_temp, key=lambda x: (-x['punti'], x['nome']))
 
 if st.session_state.current_page == "Classifica":
-    # SEZIONE NEWS E VIDEO (SOLO IN CLASSIFICA E VALIDE PER MAX 24 ORE)
     try:
         news_data = supabase.table("news").select("*").order("id", desc=True).execute().data
         if news_data:
@@ -761,7 +772,6 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             st.download_button("📥 Esporta Classifica CSV", df_export.to_csv(index=False).encode('utf-8'), "classifica_fantabet.csv", "text/csv")
         
         for pos, item in enumerate(classifica, 1):
-            # Assegnazione dello stile dorato e della medaglia SOLO al primo in classifica
             c_class = "gold" if pos == 1 else ("silver" if pos == 2 and not is_coppa else ("bronze" if pos == 3 and not is_coppa else ""))
             badge_pos = "🥇" if pos == 1 else ("🥈" if pos == 2 and not is_coppa else ("🥉" if pos == 3 and not is_coppa else f"{pos}°"))
             logo_html = f"<img src='{html.escape(item['logo'])}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
