@@ -132,29 +132,50 @@ def mostra_countdown_giornata_home(giornata):
 
     now = datetime.now(timezone.utc)
     diff = prime_match_time - now
+    secondi_rimanenti = int(diff.total_seconds())
     
-    if diff.total_seconds() > 0:
-        g, r = diff.days, diff.seconds
-        h, r = divmod(r, 3600)
-        m, s = divmod(r, 60)
-        st.markdown(f"""
-            <div class="alert-box" style="text-align: center; border-left: 5px solid #FF4B4B;">
-                ⏳ <b>Countdown Inizio Giornata {giornata} (Prima Partita):</b><br>
-                <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Componente invisibile per aggiornare la pagina ogni 60 secondi e far scorrere il tempo
-        components.html(
-            """
-            <script>
-                setTimeout(function(){
+    if secondi_rimanenti <= 0:
+        return
+
+    countdown_html = f"""
+        <div class="alert-box" style="text-align: center; border-left: 5px solid #FF4B4B;" id="countdown-container">
+            ⏳ <b>Countdown Inizio Giornata {giornata} (Prima Partita):</b><br>
+            <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;" id="timer-text">Caricamento in corso...</span>
+        </div>
+
+        <script>
+        (function() {{
+            var totalSeconds = {secondi_rimanenti};
+            var timerElement = document.getElementById("timer-text");
+            var containerElement = document.getElementById("countdown-container");
+
+            function updateTimer() {{
+                if (totalSeconds <= 0) {{
+                    containerElement.style.display = "none";
                     window.parent.location.reload();
-                }, 60000);
-            </script>
-            """,
-            height=0,
-        )
+                    return;
+                }}
+                
+                var days = Math.floor(totalSeconds / (3600 * 24));
+                var hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+                var minutes = Math.floor((totalSeconds % 3600) / 60);
+                var seconds = totalSeconds % 60;
+
+                var text = "";
+                if (days > 0) text += days + "g ";
+                text += hours + "h " + minutes + "m " + seconds + "s";
+                
+                timerElement.innerHTML = text;
+                totalSeconds--;
+            }}
+
+            updateTimer();
+            setInterval(updateTimer, 1000);
+        }})();
+        </script>
+    """
+    
+    components.html(countdown_html, height=90)
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -296,7 +317,7 @@ def squadre_corrispondono(nome_a, nome_b):
         return False
     return na == nb or na in nb or nb in na
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=86400)
 def recupera_risultati_giornata(giornata):
     if not FOOTBALL_DATA_API_KEY:
         return None, "Chiave FOOTBALL_DATA_API_KEY non configurata nei secrets."
@@ -698,11 +719,10 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE CON REFRESH AUTOMATICO
+# COUNTDOWN DINAMICO IN TEMPO REALE
 g_corrente = get_giornata_corrente()
 mostra_countdown_giornata_home(g_corrente)
 
-g_corrente = get_giornata_corrente()
 st.markdown(f"""
     <div class="alert-box">
         💡 <b>Info Lega:</b> Giornata corrente stimata: <b>Giornata {g_corrente}</b>. Verifica i pronostici e segui l'andamento in tempo reale.
