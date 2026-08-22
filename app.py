@@ -104,9 +104,10 @@ if "splash_mostrato" not in st.session_state:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# FUNZIONI DI SUPPORTO E COUNTDOWN
+# FUNZIONI DI SUPPORTO E COUNTDOWN (CACHE 24H)
 # =========================================================
 
+@st.cache_data(ttl=86400)
 def get_orario_prima_partita(giornata):
     if not FOOTBALL_DATA_API_KEY:
         return None
@@ -360,6 +361,9 @@ def estrai_pronostici_schedina(schedina_url, model):
         return None, f"Errore lettura/analisi immagine: {e}"
 
 def analizza_e_calcola_punti(giornata, supabase_client, squadre_lista):
+    # Svuota la cache per garantire il refresh dei risultati reali appena segnati
+    recupera_risultati_giornata.clear()
+    
     risultati_reali, err = recupera_risultati_giornata(giornata)
     if err:
         return None, err
@@ -652,7 +656,6 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Errore caricamento video: {e}")
 
-                # Salvataggio con datetime ISO completo comprensivo di fuso orario UTC
                 supabase.table("news").insert({
                     "testo": nuova_news, 
                     "video_url": video_url, 
@@ -683,7 +686,7 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE
+# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE (svanisce a inizio giornata)
 g_corrente = get_giornata_corrente()
 mostra_countdown_giornata_home(g_corrente)
 
@@ -729,7 +732,7 @@ if st.session_state.current_page == "Classifica":
                     else:
                         data_news = datetime.strptime(data_news_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 except Exception:
-                    data_news = datetime.now(timezone.utc) # Fallback di sicurezza se la stringa è corrotta
+                    data_news = datetime.now(timezone.utc)
                 
                 adesso = datetime.now(timezone.utc)
                 if adesso - data_news <= timedelta(hours=24):
@@ -744,7 +747,7 @@ if st.session_state.current_page == "Classifica":
                     
                     if video_url_news:
                         st.video(video_url_news)
-    except Exception as e:
+    except Exception:
         pass
 
 if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Primavera"]:
@@ -758,7 +761,7 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             st.download_button("📥 Esporta Classifica CSV", df_export.to_csv(index=False).encode('utf-8'), "classifica_fantabet.csv", "text/csv")
         
         for pos, item in enumerate(classifica, 1):
-            # Assegnazione dello stile dorato e della medaglia SOLO al primo in classifica per ogni schermata (Classifica o Coppe)
+            # Assegnazione dello stile dorato e della medaglia SOLO al primo in classifica
             c_class = "gold" if pos == 1 else ("silver" if pos == 2 and not is_coppa else ("bronze" if pos == 3 and not is_coppa else ""))
             badge_pos = "🥇" if pos == 1 else ("🥈" if pos == 2 and not is_coppa else ("🥉" if pos == 3 and not is_coppa else f"{pos}°"))
             logo_html = f"<img src='{html.escape(item['logo'])}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
