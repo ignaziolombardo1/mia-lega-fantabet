@@ -613,11 +613,11 @@ with st.sidebar:
                     time.sleep(1.0)
                     st.rerun()
 
-        with tab6:
+     with tab6:
             st.write("### 📢 Bacheca Ultime Notizie & Video")
-            nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine!")
             
-            # Campo caricamento video opzionale
+            # --- INSERIMENTO NEWS ---
+            nuova_news = st.text_area("Messaggio Bacheca", placeholder="Es. Ricordatevi di caricare le schedine!")
             video_file = st.file_uploader("Carica Video Notizia (Opzionale)", type=["mp4", "mov", "avi"])
             
             if st.button("Pubblica News con Video"):
@@ -634,11 +634,6 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Errore caricamento video: {e}")
 
-                try:
-                    supabase.table("news").delete().neq("id", 0).execute()
-                except Exception:
-                    pass
-                    
                 supabase.table("news").insert({
                     "testo": nuova_news, 
                     "video_url": video_url, 
@@ -648,6 +643,22 @@ with st.sidebar:
                 st.toast("News e Video pubblicati con successo!", icon="🎬")
                 time.sleep(1.0)
                 st.rerun()
+
+            st.markdown("---")
+            
+            # --- ELIMINAZIONE NEWS ---
+            st.write("### 🗑️ Gestione News Esistenti")
+            news_correnti = supabase.table("news").select("id, testo, data").order("id", desc=True).execute().data or []
+            
+            for n in news_correnti:
+                col_testo, col_elimina = st.columns([0.8, 0.2])
+                col_testo.info(f"{n['data']}: {n['testo']}")
+                
+                if col_elimina.button("🗑️", key=f"del_news_{n['id']}"):
+                    supabase.table("news").delete().eq("id", n['id']).execute()
+                    st.toast("News eliminata", icon="🗑️")
+                    time.sleep(0.5)
+                    st.rerun()
 
 # =========================================================
 # INTERFACCIA PRINCIPALE
