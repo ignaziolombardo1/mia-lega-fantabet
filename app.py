@@ -131,7 +131,6 @@ def mostra_countdown_giornata_home(giornata):
     now = datetime.now(timezone.utc)
     diff = prime_match_time - now
     
-    # Se mancano più di 0 secondi, mostra il countdown
     if diff.total_seconds() > 0:
         g, r = diff.days, diff.seconds
         h, r = divmod(r, 3600)
@@ -142,7 +141,6 @@ def mostra_countdown_giornata_home(giornata):
                 <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;">{g}g {h}h {m}m {s}s</span>
             </div>
         """, unsafe_allow_html=True)
-    # Se la prima partita è iniziata, non mostriamo nulla (si "leva" da solo finché non finisce la giornata)
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -654,7 +652,7 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Errore caricamento video: {e}")
 
-                # Salviamo il timestamp corrente per il controllo delle 24 ore
+                # Salvataggio con datetime ISO completo comprensivo di fuso orario UTC
                 supabase.table("news").insert({
                     "testo": nuova_news, 
                     "video_url": video_url, 
@@ -685,7 +683,7 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE (svanisce a inizio giornata)
+# COUNTDOWN DINAMICO NELLA SCHERMATA PRINCIPALE
 g_corrente = get_giornata_corrente()
 mostra_countdown_giornata_home(g_corrente)
 
@@ -724,12 +722,14 @@ if st.session_state.current_page == "Classifica":
             ultima_news_obj = news_data[0]
             data_news_str = ultima_news_obj.get('data', '')
             
-            # Controllo validità 24 ore
             if data_news_str:
                 try:
-                    data_news = datetime.fromisoformat(data_news_str.replace("Z", "+00:00"))
-                except ValueError:
-                    data_news = datetime.strptime(data_news_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    if "T" in data_news_str:
+                        data_news = datetime.fromisoformat(data_news_str.replace("Z", "+00:00"))
+                    else:
+                        data_news = datetime.strptime(data_news_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                except Exception:
+                    data_news = datetime.now(timezone.utc) # Fallback di sicurezza se la stringa è corrotta
                 
                 adesso = datetime.now(timezone.utc)
                 if adesso - data_news <= timedelta(hours=24):
@@ -744,7 +744,7 @@ if st.session_state.current_page == "Classifica":
                     
                     if video_url_news:
                         st.video(video_url_news)
-    except Exception:
+    except Exception as e:
         pass
 
 if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Primavera"]:
@@ -758,8 +758,9 @@ if st.session_state.current_page in ["Classifica", "Coppa Inverno", "Coppa Prima
             st.download_button("📥 Esporta Classifica CSV", df_export.to_csv(index=False).encode('utf-8'), "classifica_fantabet.csv", "text/csv")
         
         for pos, item in enumerate(classifica, 1):
-            c_class = "gold" if pos == 1 else "silver" if pos == 2 else "bronze" if pos == 3 else "" if not is_coppa else ("gold" if pos == 1 else "")
-            badge_pos = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"{pos}°" if not is_coppa else ("🥇" if pos == 1 else f"{pos}°")
+            # Assegnazione dello stile dorato e della medaglia SOLO al primo in classifica per ogni schermata (Classifica o Coppe)
+            c_class = "gold" if pos == 1 else ("silver" if pos == 2 and not is_coppa else ("bronze" if pos == 3 and not is_coppa else ""))
+            badge_pos = "🥇" if pos == 1 else ("🥈" if pos == 2 and not is_coppa else ("🥉" if pos == 3 and not is_coppa else f"{pos}°"))
             logo_html = f"<img src='{html.escape(item['logo'])}' style='width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:12px;' />" if item['logo'] else "⚽ "
             
             st.markdown(f"""<div class="card {c_class}"><div style="display:flex; align-items:center;">
