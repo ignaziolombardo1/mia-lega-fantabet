@@ -138,9 +138,13 @@ def mostra_countdown_giornata_home(giornata):
         return
 
     countdown_html = f"""
-        <div class="alert-box" style="text-align: center; border-left: 5px solid #FF4B4B;" id="countdown-container">
-            ⏳ <b>Countdown Inizio Giornata {giornata} (Prima Partita):</b><br>
-            <span style="font-size: 1.3em; font-weight: bold; color: #FFD700;" id="timer-text">Caricamento in corso...</span>
+        <div style="background: rgba(15, 23, 42, 0.9); border: 2px solid #FF4B4B; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 25px; box-shadow: 0 8px 16px rgba(0,0,0,0.5);" id="countdown-container">
+            <div style="font-size: 1.1em; color: #E2E8F0; font-weight: 600; margin-bottom: 8px; font-family: sans-serif;">
+                ⏳ <b>Inizio Giornata {giornata} (Prima Partita):</b>
+            </div>
+            <div style="font-size: 1.8em; font-weight: 800; color: #FFD700; font-family: monospace, sans-serif; letter-spacing: 2px; text-shadow: 2px 2px 8px rgba(0,0,0,0.8);" id="timer-text">
+                Caricamento...
+            </div>
         </div>
 
         <script>
@@ -163,7 +167,9 @@ def mostra_countdown_giornata_home(giornata):
 
                 var text = "";
                 if (days > 0) text += days + "g ";
-                text += hours + "h " + minutes + "m " + seconds + "s";
+                text += (hours < 10 ? "0" : "") + hours + "h " + 
+                        (minutes < 10 ? "0" : "") + minutes + "m " + 
+                        (seconds < 10 ? "0" : "") + seconds + "s";
                 
                 timerElement.innerHTML = text;
                 totalSeconds--;
@@ -175,7 +181,7 @@ def mostra_countdown_giornata_home(giornata):
         </script>
     """
     
-    components.html(countdown_html, height=90)
+    components.html(countdown_html, height=110)
 
 def get_giornata_corrente():
     oggi = datetime.now().date()
@@ -719,7 +725,7 @@ with st.sidebar:
 
 st.title("⚽ FantaBet Serie A Pro")
 
-# COUNTDOWN DINAMICO IN TEMPO REALE
+# COUNTDOWN DINAMICO IN TEMPO REALE CON NUOVO DESIGN
 g_corrente = get_giornata_corrente()
 mostra_countdown_giornata_home(g_corrente)
 
